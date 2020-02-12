@@ -10,3 +10,6 @@ stringr
 forcats
 bindrcpp
 plotly
+psych
+GPArotation
+reshape2

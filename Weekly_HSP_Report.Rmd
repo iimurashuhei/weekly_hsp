@@ -1070,7 +1070,63 @@ age_T4_discriptive <-
 knitr::kable(age_T4_discriptive, digits = 2) #出力
 ```
 
+## 1-5. 内的整合性
+```{r consistency, include = TRUE}
+library(psych)
+library(GPArotation)
+
+#hsc_T1
+alpha(data[, c(6,7,8,9,11,12,13,14,15,16,17)]) #alpha .63
+omega(data[, c(6,7,8,9,11,12,13,14,15,16,17)],3,fm="ml") #omega hierarchical=.41, omega total=.74
+
+#hsc_T2
+alpha(data[, c(27,28,29,30,32,33,34,35,36,37,38)]) #alpha .78
+omega(data[, c(27,28,29,30,32,33,34,35,36,37,38)],3,fm="ml") #omega hierarchical=.64, omega total=.84
+
+#hsc_T3
+alpha(data[, c(48,49,50,51,53,54,55,56,57,58,59)]) #alpha .75
+omega(data[, c(48,49,50,51,53,54,55,56,57,58,59)],3,fm="ml") #omega hierarchical=.59, omega total=.83
+
+#hsc_T4
+alpha(data[, c(69,70,71,72,74,75,76,77,78,79,80)]) #alpha .79
+omega(data[, c(69,70,71,72,74,75,76,77,78,79,80)],3,fm="ml") #omega hierarchical=.71, omega total=.86
+
+#wb_T1
+alpha(data[, c(18:22)]) #alpha .78
+omega(data[, c(18:22)],1,fm="ml") #omega hierarchical=.78, omega total=.79
+
+#wb_T2
+alpha(data[, c(39:43)]) #alpha .85
+omega(data[, c(39:43)],1,fm="ml") #omega hierarchical=.83, omega total=.85
+
+#wb_T3
+alpha(data[, c(60:64)]) #alpha .85
+omega(data[, c(60:64)],1,fm="ml") #omega hierarchical=.85, omega total=.85
+
+#wb_T4
+alpha(data[, c(81:85)]) #alpha .90
+omega(data[, c(81:85)],1,fm="ml") #omega hierarchical=.90, omega total=.90
+```
 
 # （2）相関係数の算出
+```{r corheatmap, include = TRUE}
+cordata <- data %>% dplyr::select(hsc_T1,hsc_T2,hsc_T3,hsc_T4,wb_T1,wb_T2,wb_T3,wb_T4,ev_T1,ev_T2,ev_T3,ev_T4,hsc_onemonth,wb_onemonth,ev_onemonth) %>% drop_na()
+head(cordata)
+names(cordata)
+cormat <- round(cor(cordata),2)
+head(cormat)
+library(reshape2)
+melted_cormat <- melt(cormat)
+head(melted_cormat)
+ggplot(data = melted_cormat, aes(Var2, Var1, fill = value))+
+  geom_tile(color = "white")+
+  scale_fill_gradient2(low = "blue", high = "red", mid = "white", 
+                       midpoint = 0, limit = c(-1,1), space = "Lab", 
+                       name="Pearson\nCorrelation") +
+  theme_minimal()+ 
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, 
+                                   size = 12, hjust = 1))+
+  coord_fixed()
+```
 
 # 分析は以上です

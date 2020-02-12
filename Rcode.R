@@ -8,6 +8,8 @@ pwr.r.test(r = 0.4, power = 0.8) #r=.4をターゲット
 #（1）前処理 ----
 library(tidyverse)
 
+#メモ：欠損値の処理はリストワイズにする
+
 ##1-1. ローデータ読み込み ----
 lowdata <- read_csv("lowdata_4timepoints.csv", na = c(".", ""))
 lowdata$gender_T1 <- factor(lowdata$gender_T1) #性別をfactor型に変換
@@ -970,8 +972,25 @@ alpha(data[, c(81:85)]) #alpha .90
 omega(data[, c(81:85)],1,fm="ml") #omega hierarchical=.90, omega total=.90
 
 
-#（2）相関係数 ----
+#（2）相関係数 ※具体的な数値や係数はHADファイルを参照してください----
 
+cordata <- data %>% dplyr::select(hsc_T1,hsc_T2,hsc_T3,hsc_T4,wb_T1,wb_T2,wb_T3,wb_T4,ev_T1,ev_T2,ev_T3,ev_T4,hsc_onemonth,wb_onemonth,ev_onemonth) %>% drop_na()
+head(cordata)
+names(cordata)
+cormat <- round(cor(cordata),2)
+head(cormat)
+library(reshape2)
+melted_cormat <- melt(cormat)
+head(melted_cormat)
+ggplot(data = melted_cormat, aes(Var2, Var1, fill = value))+
+  geom_tile(color = "white")+
+  scale_fill_gradient2(low = "blue", high = "red", mid = "white", 
+                       midpoint = 0, limit = c(-1,1), space = "Lab", 
+                       name="Pearson\nCorrelation") +
+  theme_minimal()+ 
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, 
+                                   size = 12, hjust = 1))+
+  coord_fixed()
 
 
 
