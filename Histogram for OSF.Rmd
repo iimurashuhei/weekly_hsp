@@ -1,0 +1,692 @@
+---
+title: "Weekly HSP Project"
+author: "Author"
+date: "2020/2/17"
+output: 
+  html_document:
+    toc: true
+    toc:_depth: 4
+    toc_float: true
+    df_print: "paged"
+    theme: cosmo
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE, fig.height = 12, fig.width = 12, warning = FALSE, cache = TRUE)
+#セットアップチャンクの設定はこの通り #エラー警告は非表示にした #キャッシュ利用に設定
+```
+
+# Note
+  * This file shows histograms for all measures including HSCS, life event, and WHO-5.
+  * hsc = highly sensitive child scale (i.e., sensory-processing sensitivity)
+  * wb = WHO-5 (i.e., socioemotional well-being)
+  * ev = life event
+
+```{r handling, include = FALSE}
+#tidyverseパッケージ読み込み
+library(tidyverse)
+
+#データ読み込み
+lowdata <- read_csv("lowdata_4timepoints.csv", na = c(".", ""))
+lowdata$gender_T1 <- factor(lowdata$gender_T1) #性別をfactor型に変換
+lowdata$gender_T2 <- factor(lowdata$gender_T2) #性別をfactor型に変換
+lowdata$gender_T3 <- factor(lowdata$gender_T3) #性別をfactor型に変換
+lowdata$gender_T4 <- factor(lowdata$gender_T4) #性別をfactor型に変換
+head(lowdata) #先頭6行確認
+names(lowdata) #変数名確認
+```
+
+```{r subscales, include = FALSE}
+data <- lowdata %>% 
+  dplyr::mutate(eoe_T1 = (hsc4_T1 + hsc6_T1 + hsc8_T1 + hsc9_T1 + hsc12_T1)/5, na.rm = TRUE) %>% #EOE_T1の平均
+  dplyr::mutate(lst_T1 = (hsc2_T1 + hsc11_T1)/2, na.rm = TRUE) %>% #LST_T1の平均
+  dplyr::mutate(aes_T1 = (hsc5_T1 + hsc10_T1 + hsc1_T1 + hsc3_T1)/4, na.rm = TRUE) %>% #AES_T1の平均
+  dplyr::mutate(hsc_T1 = (eoe_T1 + lst_T1 + aes_T1)/3, na.rm = TRUE) %>% #HSC_T1の平均
+  dplyr::mutate(eoe_T2 = (hsc4_T2 + hsc6_T2 + hsc8_T2 + hsc9_T2 + hsc12_T2)/5, na.rm = TRUE) %>% #EOE_T2の平均
+  dplyr::mutate(lst_T2 = (hsc2_T2 + hsc11_T2)/2, na.rm = TRUE) %>% #LST_T2の平均
+  dplyr::mutate(aes_T2 = (hsc5_T2 + hsc10_T2 + hsc1_T2 + hsc3_T2)/4, na.rm = TRUE) %>% #AES_T2の平均
+  dplyr::mutate(hsc_T2 = (eoe_T2 + lst_T2 + aes_T2)/3, na.rm = TRUE)  %>% #HSC_T2の平均
+  dplyr::mutate(eoe_T3 = (hsc4_T3 + hsc6_T3 + hsc8_T3 + hsc9_T3 + hsc12_T3)/5, na.rm = TRUE) %>% #EOE_T3の平均
+  dplyr::mutate(lst_T3 = (hsc2_T3 + hsc11_T3)/2, na.rm = TRUE) %>% #LST_T3の平均
+  dplyr::mutate(aes_T3 = (hsc5_T3 + hsc10_T3 + hsc1_T3 + hsc3_T3)/4, na.rm = TRUE) %>% #AES_T3の平均
+  dplyr::mutate(hsc_T3 = (eoe_T3 + lst_T3 + aes_T3)/3, na.rm = TRUE) %>% #HSC_T3の平均
+  dplyr::mutate(eoe_T4 = (hsc4_T4 + hsc6_T4 + hsc8_T4 + hsc9_T4 + hsc12_T4)/5, na.rm = TRUE) %>% #EOE_T4の平均
+  dplyr::mutate(lst_T4 = (hsc2_T4 + hsc11_T4)/2, na.rm = TRUE) %>% #LST_T4の平均
+  dplyr::mutate(aes_T4 = (hsc5_T4 + hsc10_T4 + hsc1_T4 + hsc3_T4)/4, na.rm = TRUE) %>% #AES_T4の平均
+  dplyr::mutate(hsc_T4 = (eoe_T4 + lst_T4 + aes_T4)/3, na.rm = TRUE) %>% #HSC_T4の平均
+  dplyr::mutate(hsc_onemonth = (hsc_T1 + hsc_T2 + hsc_T3 + hsc_T4)/4, na.rm = TRUE) %>% #1ヵ月間のHSC平均
+  dplyr::mutate(wb_T1 = (wb1_T1 + wb2_T1 + wb3_T1 + wb4_T1 + wb5_T1)/5, na.rm = TRUE) %>% #wb_T1の平均
+  dplyr::mutate(wb_T2 = (wb1_T2 + wb2_T2 + wb3_T2 + wb4_T2 + wb5_T2)/5, na.rm = TRUE) %>% #wb_T2の平均
+  dplyr::mutate(wb_T3 = (wb1_T3 + wb2_T3 + wb3_T3 + wb4_T3 + wb5_T3)/5, na.rm = TRUE) %>% #wb_T3の平均
+  dplyr::mutate(wb_T4 = (wb1_T4 + wb2_T4 + wb3_T4 + wb4_T4 + wb5_T4)/5, na.rm = TRUE) %>% #wb_T4の平均
+  dplyr::mutate(wb_onemonth = (wb_T1 + wb_T2 + wb_T3 + wb_T4)/4, na.rm = TRUE) %>% #1か月間のwb平均
+  dplyr::mutate(ev_T1 = (as.numeric(ev1_T1) + as.numeric(ev2_T1))/2, na.rm = TRUE) %>% #event_T1の平均 #as.numericにしないとエラーが出る
+  dplyr::mutate(ev_T2 = (as.numeric(ev1_T2) + as.numeric(ev2_T2))/2, na.rm = TRUE) %>% #event_T2の平均
+  dplyr::mutate(ev_T3 = (as.numeric(ev1_T3) + as.numeric(ev2_T3))/2, na.rm = TRUE) %>% #event_T3の平均
+  dplyr::mutate(ev_T4 = (as.numeric(ev1_T4) + as.numeric(ev2_T4))/2, na.rm = TRUE) %>% #event_T4の平均
+  dplyr::mutate(ev_onemonth = (ev_T1 + ev_T2 + ev_T3 + ev_T4)/4, na.rm = TRUE) %>% #1か月間のev平均
+  dplyr::select(-na.rm) #謎にna.rmという変数が勝手に作成されてしまうのでそれを除外
+
+head(data) #先頭6行確認
+names(data) #変数名確認
+# write.csv(data, file = "data_for_analysis.csv", na = ".") #csvで書き出し
+```
+
+## Histograms
+```{r count, include = TRUE}
+library(plotly)
+
+#hsc1_T1
+hsc1_T1_count <- dplyr::count(data, hsc1_T1)
+knitr::kable(hsc1_T1_count)
+e <- ggplot(data = data, mapping = aes(x = hsc1_T1, fill = factor(hsc1_T1))) + geom_histogram(binwidth = 1)
+ggplotly(e)
+
+#hsc2_T1
+hsc2_T1_count <- dplyr::count(data, hsc2_T1)
+knitr::kable(hsc2_T1_count)
+f <- ggplot(data = data, mapping = aes(x = hsc2_T1, fill = factor(hsc2_T1))) + geom_histogram(binwidth = 1)
+ggplotly(f)
+
+#hsc3_T1
+hsc3_T1_count <- dplyr::count(data, hsc3_T1)
+knitr::kable(hsc3_T1_count) 
+g <- ggplot(data = data, mapping = aes(x = hsc3_T1, fill = factor(hsc3_T1))) + geom_histogram(binwidth = 1) 
+ggplotly(g) 
+
+#hsc4_T1
+hsc4_T1_count <- dplyr::count(data, hsc4_T1)
+knitr::kable(hsc4_T1_count) 
+h <- ggplot(data = data, mapping = aes(x = hsc4_T1, fill = factor(hsc4_T1))) + geom_histogram(binwidth = 1) 
+ggplotly(h) 
+
+#hsc5_T1
+hsc5_T1_count <- dplyr::count(data, hsc5_T1)
+knitr::kable(hsc5_T1_count)
+i <- ggplot(data = data, mapping = aes(x = hsc5_T1, fill = factor(hsc5_T1))) + geom_histogram(binwidth = 1)
+ggplotly(i)
+
+#hsc6_T1
+hsc6_T1_count <- dplyr::count(data, hsc6_T1)
+knitr::kable(hsc6_T1_count) 
+j <- ggplot(data = data, mapping = aes(x = hsc6_T1, fill = factor(hsc6_T1))) + geom_histogram(binwidth = 1)
+ggplotly(j)
+
+#hsc7_T1
+hsc7_T1_count <- dplyr::count(data, hsc7_T1)
+knitr::kable(hsc7_T1_count)
+k <- ggplot(data = data, mapping = aes(x = hsc7_T1, fill = factor(hsc7_T1))) + geom_histogram(binwidth = 1) 
+ggplotly(k)
+
+#hsc8_T1
+hsc8_T1_count <- dplyr::count(data, hsc8_T1)
+knitr::kable(hsc8_T1_count) 
+l <- ggplot(data = data, mapping = aes(x = hsc8_T1, fill = factor(hsc8_T1))) + geom_histogram(binwidth = 1)
+ggplotly(l)
+
+#hsc9_T1
+hsc9_T1_count <- dplyr::count(data, hsc9_T1)
+knitr::kable(hsc9_T1_count) 
+m <- ggplot(data = data, mapping = aes(x = hsc9_T1, fill = factor(hsc9_T1))) + geom_histogram(binwidth = 1) 
+ggplotly(m)
+
+#hsc10_T1
+hsc10_T1_count <- dplyr::count(data, hsc10_T1)
+knitr::kable(hsc10_T1_count) 
+n <- ggplot(data = data, mapping = aes(x = hsc10_T1, fill = factor(hsc10_T1))) + geom_histogram(binwidth = 1)
+ggplotly(n)
+
+#hsc11_T1
+hsc11_T1_count <- dplyr::count(data, hsc11_T1)
+knitr::kable(hsc11_T1_count) 
+o <- ggplot(data = data, mapping = aes(x = hsc11_T1, fill = factor(hsc11_T1))) + geom_histogram(binwidth = 1) 
+ggplotly(o) 
+
+#hsc12_T1
+hsc12_T1_count <- dplyr::count(data, hsc12_T1)
+knitr::kable(hsc12_T1_count) 
+p <- ggplot(data = data, mapping = aes(x = hsc12_T1, fill = factor(hsc12_T1))) + geom_histogram(binwidth = 1) 
+ggplotly(p) 
+
+#hsc1_T2
+hsc1_T2_count <- dplyr::count(data, hsc1_T2)
+knitr::kable(hsc1_T2_count) 
+q <- ggplot(data = data, mapping = aes(x = hsc1_T2, fill = factor(hsc1_T2))) + geom_histogram(binwidth = 1)
+ggplotly(q)
+
+#hsc2_T2
+hsc2_T2_count <- dplyr::count(data, hsc2_T2)
+knitr::kable(hsc2_T2_count) 
+r <- ggplot(data = data, mapping = aes(x = hsc2_T2, fill = factor(hsc2_T2))) + geom_histogram(binwidth = 1) 
+ggplotly(r) 
+
+#hsc3_T2
+hsc3_T2_count <- dplyr::count(data, hsc3_T2)
+knitr::kable(hsc3_T2_count) 
+s <- ggplot(data = data, mapping = aes(x = hsc3_T2, fill = factor(hsc3_T2))) + geom_histogram(binwidth = 1) 
+ggplotly(s) 
+
+#hsc4_T2
+hsc4_T2_count <- dplyr::count(data, hsc4_T2)
+knitr::kable(hsc4_T2_count) 
+t <- ggplot(data = data, mapping = aes(x = hsc4_T2, fill = factor(hsc4_T2))) + geom_histogram(binwidth = 1) 
+ggplotly(t) 
+
+#hsc5_T2
+hsc5_T2_count <- dplyr::count(data, hsc5_T2)
+knitr::kable(hsc5_T2_count) 
+u <- ggplot(data = data, mapping = aes(x = hsc5_T2, fill = factor(hsc5_T2))) + geom_histogram(binwidth = 1) 
+ggplotly(u)
+
+#hsc6_T2
+hsc6_T2_count <- dplyr::count(data, hsc6_T2)
+knitr::kable(hsc6_T2_count) 
+v <- ggplot(data = data, mapping = aes(x = hsc6_T2, fill = factor(hsc6_T2))) + geom_histogram(binwidth = 1) 
+ggplotly(v) 
+
+#hsc7_T2
+hsc7_T2_count <- dplyr::count(data, hsc7_T2)
+knitr::kable(hsc7_T2_count) 
+w <- ggplot(data = data, mapping = aes(x = hsc7_T2, fill = factor(hsc7_T2))) + geom_histogram(binwidth = 1) 
+ggplotly(w) 
+
+#hsc8_T2
+hsc8_T2_count <- dplyr::count(data, hsc8_T2)
+knitr::kable(hsc8_T2_count) 
+neko <- ggplot(data = data, mapping = aes(x = hsc8_T2, fill = factor(hsc8_T2))) + geom_histogram(binwidth = 1) 
+ggplotly(neko)
+
+#hsc9_T2
+hsc9_T2_count <- dplyr::count(data, hsc9_T2)
+knitr::kable(hsc9_T2_count) 
+y <- ggplot(data = data, mapping = aes(x = hsc9_T2, fill = factor(hsc9_T2))) + geom_histogram(binwidth = 1) 
+ggplotly(y) 
+
+#hsc10_T2
+hsc10_T2_count <- dplyr::count(data, hsc10_T2)
+knitr::kable(hsc10_T2_count) 
+z <- ggplot(data = data, mapping = aes(x = hsc10_T2, fill = factor(hsc10_T2))) + geom_histogram(binwidth = 1) 
+ggplotly(z)
+
+#hsc11_T2
+hsc11_T2_count <- dplyr::count(data, hsc11_T2)
+knitr::kable(hsc11_T2_count) 
+aa <- ggplot(data = data, mapping = aes(x = hsc11_T2, fill = factor(hsc11_T2))) + geom_histogram(binwidth = 1) 
+ggplotly(aa)
+
+#hsc12_T2
+hsc12_T2_count <- dplyr::count(data, hsc12_T2)
+knitr::kable(hsc12_T2_count) 
+bb <- ggplot(data = data, mapping = aes(x = hsc12_T2, fill = factor(hsc12_T2))) + geom_histogram(binwidth = 1) 
+ggplotly(bb)
+
+#hsc1_T3
+hsc1_T3_count <- dplyr::count(data, hsc1_T3)
+knitr::kable(hsc1_T3_count) 
+cc <- ggplot(data = data, mapping = aes(x = hsc1_T3, fill = factor(hsc1_T3))) + geom_histogram(binwidth = 1) 
+ggplotly(cc) 
+
+#hsc2_T3
+hsc2_T3_count <- dplyr::count(data, hsc2_T3)
+knitr::kable(hsc2_T3_count) 
+dd <- ggplot(data = data, mapping = aes(x = hsc2_T3, fill = factor(hsc2_T3))) + geom_histogram(binwidth = 1) 
+ggplotly(dd) 
+
+#hsc3_T3
+hsc3_T3_count <- dplyr::count(data, hsc3_T3)
+knitr::kable(hsc3_T3_count) 
+ff <- ggplot(data = data, mapping = aes(x = hsc3_T3, fill = factor(hsc3_T3))) + geom_histogram(binwidth = 1) 
+ggplotly(ff)
+
+#hsc4_T3
+hsc4_T3_count <- dplyr::count(data, hsc4_T3)
+knitr::kable(hsc4_T3_count) 
+gg <- ggplot(data = data, mapping = aes(x = hsc4_T3, fill = factor(hsc4_T3))) + geom_histogram(binwidth = 1) 
+ggplotly(gg) 
+
+#hsc5_T3
+hsc5_T3_count <- dplyr::count(data, hsc5_T3)
+knitr::kable(hsc5_T3_count)
+hh <- ggplot(data = data, mapping = aes(x = hsc5_T3, fill = factor(hsc5_T3))) + geom_histogram(binwidth = 1)
+ggplotly(hh) 
+
+#hsc6_T3
+hsc6_T3_count <- dplyr::count(data, hsc6_T3)
+knitr::kable(hsc6_T3_count) 
+ii <- ggplot(data = data, mapping = aes(x = hsc6_T3, fill = factor(hsc6_T3))) + geom_histogram(binwidth = 1) 
+ggplotly(ii)
+
+#hsc7_T3
+hsc7_T3_count <- dplyr::count(data, hsc7_T3)
+knitr::kable(hsc7_T3_count) 
+jj <- ggplot(data = data, mapping = aes(x = hsc7_T3, fill = factor(hsc7_T3))) + geom_histogram(binwidth = 1) 
+ggplotly(jj) 
+
+#hsc8_T3
+hsc8_T3_count <- dplyr::count(data, hsc8_T3)
+knitr::kable(hsc8_T3_count) 
+kk <- ggplot(data = data, mapping = aes(x = hsc8_T3, fill = factor(hsc8_T3))) + geom_histogram(binwidth = 1) 
+ggplotly(kk) 
+
+#hsc9_T3
+hsc9_T3_count <- dplyr::count(data, hsc9_T3)
+knitr::kable(hsc9_T3_count) 
+ll <- ggplot(data = data, mapping = aes(x = hsc9_T3, fill = factor(hsc9_T3))) + geom_histogram(binwidth = 1) 
+ggplotly(ll)
+
+#hsc10_T3
+hsc10_T3_count <- dplyr::count(data, hsc10_T3)
+knitr::kable(hsc10_T3_count) 
+dog <- ggplot(data = data, mapping = aes(x = hsc10_T3, fill = factor(hsc10_T3))) + geom_histogram(binwidth = 1) 
+ggplotly(dog) 
+
+#hsc11_T3
+hsc11_T3_count <- dplyr::count(data, hsc11_T3)
+knitr::kable(hsc11_T3_count) 
+mm <- ggplot(data = data, mapping = aes(x = hsc11_T3, fill = factor(hsc11_T3))) + geom_histogram(binwidth = 1) 
+ggplotly(mm) 
+
+#hsc12_T3
+hsc12_T3_count <- dplyr::count(data, hsc12_T3)
+knitr::kable(hsc12_T3_count) 
+nn <- ggplot(data = data, mapping = aes(x = hsc12_T3, fill = factor(hsc12_T3))) + geom_histogram(binwidth = 1) 
+ggplotly(nn) 
+
+#hsc1_T4
+hsc1_T4_count <- dplyr::count(data, hsc1_T4)
+knitr::kable(hsc1_T4_count) 
+oo <- ggplot(data = data, mapping = aes(x = hsc1_T4, fill = factor(hsc1_T4))) + geom_histogram(binwidth = 1) 
+ggplotly(oo) 
+
+#hsc2_T4
+hsc2_T4_count <- dplyr::count(data, hsc2_T4)
+knitr::kable(hsc2_T4_count) 
+pp <- ggplot(data = data, mapping = aes(x = hsc2_T4, fill = factor(hsc2_T4))) + geom_histogram(binwidth = 1) 
+ggplotly(pp) 
+
+#hsc3_T4
+hsc3_T4_count <- dplyr::count(data, hsc3_T4)
+knitr::kable(hsc3_T4_count) 
+qq <- ggplot(data = data, mapping = aes(x = hsc3_T4, fill = factor(hsc3_T4))) + geom_histogram(binwidth = 1) 
+ggplotly(qq) 
+
+#hsc4_T4
+hsc4_T4_count <- dplyr::count(data, hsc4_T4)
+knitr::kable(hsc4_T4_count) 
+rr <- ggplot(data = data, mapping = aes(x = hsc4_T4, fill = factor(hsc4_T4))) + geom_histogram(binwidth = 1) 
+ggplotly(rr) 
+
+#hsc5_T4
+hsc5_T4_count <- dplyr::count(data, hsc5_T4)
+knitr::kable(hsc5_T4_count) 
+ss <- ggplot(data = data, mapping = aes(x = hsc5_T4, fill = factor(hsc5_T4))) + geom_histogram(binwidth = 1) 
+ggplotly(ss) 
+
+#hsc6_T4
+hsc6_T4_count <- dplyr::count(data, hsc6_T4)
+knitr::kable(hsc6_T4_count) 
+inu <- ggplot(data = data, mapping = aes(x = hsc6_T4, fill = factor(hsc6_T4))) + geom_histogram(binwidth = 1) 
+ggplotly(inu) 
+
+#hsc7_T4
+hsc7_T4_count <- dplyr::count(data, hsc7_T4)
+knitr::kable(hsc7_T4_count) 
+tt <- ggplot(data = data, mapping = aes(x = hsc7_T4, fill = factor(hsc7_T4))) + geom_histogram(binwidth = 1) 
+ggplotly(tt) 
+
+#hsc8_T4
+hsc8_T4_count <- dplyr::count(data, hsc8_T4)
+knitr::kable(hsc8_T4_count) 
+vv <- ggplot(data = data, mapping = aes(x = hsc8_T4, fill = factor(hsc8_T4))) + geom_histogram(binwidth = 1) 
+ggplotly(vv)
+
+#hsc9_T4
+hsc9_T4_count <- dplyr::count(data, hsc9_T4)
+knitr::kable(hsc9_T4_count)
+ww <- ggplot(data = data, mapping = aes(x = hsc9_T4, fill = factor(hsc9_T4))) + geom_histogram(binwidth = 1)
+ggplotly(ww)
+
+#hsc10_T4
+hsc10_T4_count <- dplyr::count(data, hsc10_T4)
+knitr::kable(hsc10_T4_count) 
+kame <- ggplot(data = data, mapping = aes(x = hsc10_T4, fill = factor(hsc10_T4))) + geom_histogram(binwidth = 1)
+ggplotly(kame) 
+
+#hsc11_T4
+hsc11_T4_count <- dplyr::count(data, hsc11_T4)
+knitr::kable(hsc11_T4_count) 
+yy <- ggplot(data = data, mapping = aes(x = hsc11_T4, fill = factor(hsc11_T4))) + geom_histogram(binwidth = 1) 
+ggplotly(yy) 
+
+#hsc12_T4
+hsc12_T4_count <- dplyr::count(data, hsc12_T4)
+knitr::kable(hsc12_T4_count) 
+zz <- ggplot(data = data, mapping = aes(x = hsc12_T4, fill = factor(hsc12_T4))) + geom_histogram(binwidth = 1) 
+ggplotly(zz) 
+
+#wb1_T1
+wb1_T1_count <- dplyr::count(data, wb1_T1)
+knitr::kable(wb1_T1_count) 
+aaa <- ggplot(data = data, mapping = aes(x = wb1_T1, fill = factor(wb1_T1))) + geom_histogram(binwidth = 1) 
+ggplotly(aaa) 
+
+#wb2_T1
+wb2_T1_count <- dplyr::count(data, wb2_T1)
+knitr::kable(wb2_T1_count) 
+bbb <- ggplot(data = data, mapping = aes(x = wb2_T1, fill = factor(wb2_T1))) + geom_histogram(binwidth = 1) 
+ggplotly(bbb) 
+
+#wb3_T1
+wb3_T1_count <- dplyr::count(data, wb3_T1)
+knitr::kable(wb3_T1_count) 
+ccc <- ggplot(data = data, mapping = aes(x = wb3_T1, fill = factor(wb3_T1))) + geom_histogram(binwidth = 1) 
+ggplotly(ccc) 
+
+#wb4_T1
+wb4_T1_count <- dplyr::count(data, wb4_T1)
+knitr::kable(wb4_T1_count) 
+ddd <- ggplot(data = data, mapping = aes(x = wb4_T1, fill = factor(wb4_T1))) + geom_histogram(binwidth = 1)
+ggplotly(ddd) 
+
+#wb5_T1
+wb5_T1_count <- dplyr::count(data, wb5_T1)
+knitr::kable(wb5_T1_count) 
+eee <- ggplot(data = data, mapping = aes(x = wb5_T1, fill = factor(wb5_T1))) + geom_histogram(binwidth = 1) 
+ggplotly(eee) 
+
+#wb1_T2
+wb1_T2_count <- dplyr::count(data, wb1_T2)
+knitr::kable(wb1_T2_count)
+fff <- ggplot(data = data, mapping = aes(x = wb1_T2, fill = factor(wb1_T2))) + geom_histogram(binwidth = 1) 
+ggplotly(fff) 
+
+#wb2_T2
+wb2_T2_count <- dplyr::count(data, wb2_T2)
+knitr::kable(wb2_T2_count) 
+ggg <- ggplot(data = data, mapping = aes(x = wb2_T2, fill = factor(wb2_T2))) + geom_histogram(binwidth = 1) 
+ggplotly(ggg) 
+
+#wb3_T2
+wb3_T2_count <- dplyr::count(data, wb3_T2)
+knitr::kable(wb3_T2_count) 
+hhh <- ggplot(data = data, mapping = aes(x = wb3_T2, fill = factor(wb3_T2))) + geom_histogram(binwidth = 1)
+ggplotly(hhh)
+
+#wb4_T2
+wb4_T2_count <- dplyr::count(data, wb4_T2)
+knitr::kable(wb4_T2_count) 
+iii <- ggplot(data = data, mapping = aes(x = wb4_T2, fill = factor(wb4_T2))) + geom_histogram(binwidth = 1) 
+ggplotly(iii) 
+
+#wb5_T2
+wb5_T2_count <- dplyr::count(data, wb5_T2)
+knitr::kable(wb5_T2_count) 
+jjj <- ggplot(data = data, mapping = aes(x = wb5_T2, fill = factor(wb5_T2))) + geom_histogram(binwidth = 1) 
+ggplotly(jjj) 
+
+#wb1_T3
+wb1_T3_count <- dplyr::count(data, wb1_T3)
+knitr::kable(wb1_T3_count) 
+kkk <- ggplot(data = data, mapping = aes(x = wb1_T3, fill = factor(wb1_T3))) + geom_histogram(binwidth = 1) 
+ggplotly(kkk) 
+
+#wb2_T3
+wb2_T3_count <- dplyr::count(data, wb2_T3)
+knitr::kable(wb2_T3_count) 
+lll <- ggplot(data = data, mapping = aes(x = wb2_T3, fill = factor(wb2_T3))) + geom_histogram(binwidth = 1) 
+ggplotly(lll) 
+
+#wb3_T3
+wb3_T3_count <- dplyr::count(data, wb3_T3)
+knitr::kable(wb1_T3_count) 
+mmm <- ggplot(data = data, mapping = aes(x = wb3_T3, fill = factor(wb3_T3))) + geom_histogram(binwidth = 1) 
+ggplotly(mmm) 
+
+#wb4_T3
+wb4_T3_count <- dplyr::count(data, wb4_T3)
+knitr::kable(wb4_T3_count) 
+nnn <- ggplot(data = data, mapping = aes(x = wb4_T3, fill = factor(wb4_T3))) + geom_histogram(binwidth = 1) 
+ggplotly(nnn) 
+
+#wb5_T3
+wb5_T3_count <- dplyr::count(data, wb5_T3)
+knitr::kable(wb5_T3_count) 
+ooo <- ggplot(data = data, mapping = aes(x = wb5_T3, fill = factor(wb5_T3))) + geom_histogram(binwidth = 1) 
+ggplotly(ooo) 
+
+#wb1_T4
+wb1_T4_count <- dplyr::count(data, wb1_T4)
+knitr::kable(wb1_T4_count) 
+ppp <- ggplot(data = data, mapping = aes(x = wb1_T4, fill = factor(wb1_T4))) + geom_histogram(binwidth = 1) 
+ggplotly(ppp) 
+
+#wb2_T4
+wb2_T4_count <- dplyr::count(data, wb2_T4)
+knitr::kable(wb2_T4_count) 
+qqq <- ggplot(data = data, mapping = aes(x = wb2_T4, fill = factor(wb2_T4))) + geom_histogram(binwidth = 1)
+ggplotly(qqq) 
+
+#wb3_T4
+wb3_T4_count <- dplyr::count(data, wb3_T4)
+knitr::kable(wb3_T4_count) 
+rrr <- ggplot(data = data, mapping = aes(x = wb3_T4, fill = factor(wb3_T4))) + geom_histogram(binwidth = 1) 
+ggplotly(rrr) 
+
+#wb5_T4
+wb5_T4_count <- dplyr::count(data, wb5_T4)
+knitr::kable(wb5_T4_count) 
+sss <- ggplot(data = data, mapping = aes(x = wb5_T4, fill = factor(wb5_T4))) + geom_histogram(binwidth = 1) 
+ggplotly(sss) 
+
+#event1_T1
+event1_T1_count <- dplyr::count(data, ev1_T1)
+knitr::kable(event1_T1_count) 
+ttt <- ggplot(data = data, mapping = aes(x = ev1_T1, fill = factor(ev1_T1))) + geom_histogram(binwidth = 1) 
+ggplotly(ttt) 
+
+#event2_T1
+event2_T1_count <- dplyr::count(data, ev2_T1)
+knitr::kable(event2_T1_count) 
+uuu <- ggplot(data = data, mapping = aes(x = ev2_T1, fill = factor(ev2_T1))) + geom_histogram(binwidth = 1) 
+ggplotly(uuu) 
+
+#event1_T2
+event1_T2_count <- dplyr::count(data, ev1_T2)
+knitr::kable(event1_T2_count) 
+vvv <- ggplot(data = data, mapping = aes(x = ev1_T2, fill = factor(ev1_T2))) + geom_histogram(binwidth = 1) 
+ggplotly(vvv) 
+
+#event2_T2
+event2_T2_count <- dplyr::count(data, ev2_T2)
+knitr::kable(event2_T2_count) 
+www <- ggplot(data = data, mapping = aes(x = ev2_T2, fill = factor(ev2_T2))) + geom_histogram(binwidth = 1)
+ggplotly(www) 
+
+#event1_T3
+event1_T3_count <- dplyr::count(data, ev1_T3)
+knitr::kable(event1_T3_count) 
+usagi <- ggplot(data = data, mapping = aes(x = ev1_T3, fill = factor(ev1_T3))) + geom_histogram(binwidth = 1) 
+ggplotly(usagi) 
+
+#event2_T3
+event2_T3_count <- dplyr::count(data, ev2_T3)
+knitr::kable(event2_T3_count) 
+yyy <- ggplot(data = data, mapping = aes(x = ev2_T3, fill = factor(ev2_T3))) + geom_histogram(binwidth = 1) 
+ggplotly(yyy) 
+
+#event1_T4
+event1_T4_count <- dplyr::count(data, ev1_T4)
+knitr::kable(event1_T4_count) 
+zzz <- ggplot(data = data, mapping = aes(x = ev1_T4, fill = factor(ev1_T4))) + geom_histogram(binwidth = 1) 
+ggplotly(zzz) 
+
+#event2_T4
+event2_T4_count <- dplyr::count(data, ev2_T4)
+knitr::kable(event2_T4_count) 
+aaaa <- ggplot(data = data, mapping = aes(x = ev2_T4, fill = factor(ev2_T4))) + geom_histogram(binwidth = 1) 
+ggplotly(aaaa) 
+
+#eoe_T1
+eoe_T1_count <- dplyr::count(data, eoe_T1)
+knitr::kable(eoe_T1_count) 
+bbbb <- ggplot(data = data, mapping = aes(x = eoe_T1, fill = factor(eoe_T1))) + geom_histogram(binwidth = 1) 
+ggplotly(bbbb) 
+
+#eoe_T2
+eoe_T2_count <- dplyr::count(data, eoe_T2)
+knitr::kable(eoe_T2_count) 
+cccc <- ggplot(data = data, mapping = aes(x = eoe_T2, fill = factor(eoe_T2))) + geom_histogram(binwidth = 1) 
+ggplotly(cccc) 
+
+#eoe_T3
+eoe_T3_count <- dplyr::count(data, eoe_T3)
+knitr::kable(eoe_T3_count) 
+dddd <- ggplot(data = data, mapping = aes(x = eoe_T3, fill = factor(eoe_T3))) + geom_histogram(binwidth = 1) 
+ggplotly(dddd) 
+
+#eoe_T4
+eoe_T4_count <- dplyr::count(data, eoe_T4)
+knitr::kable(eoe_T4_count) 
+eeee <- ggplot(data = data, mapping = aes(x = eoe_T4, fill = factor(eoe_T4))) + geom_histogram(binwidth = 1) 
+ggplotly(eeee) 
+
+#lst_T1
+lst_T1_count <- dplyr::count(data, lst_T1)
+knitr::kable(lst_T1_count) 
+ffff <- ggplot(data = data, mapping = aes(x = lst_T1, fill = factor(lst_T1))) + geom_histogram(binwidth = 1) 
+ggplotly(ffff) 
+
+#lst_T2
+lst_T2_count <- dplyr::count(data, lst_T2)
+knitr::kable(lst_T2_count) 
+gggg <- ggplot(data = data, mapping = aes(x = lst_T2, fill = factor(lst_T2))) + geom_histogram(binwidth = 1) 
+ggplotly(gggg) 
+
+#lst_T3
+lst_T3_count <- dplyr::count(data, lst_T3)
+knitr::kable(lst_T3_count) 
+hhhh <- ggplot(data = data, mapping = aes(x = lst_T3, fill = factor(lst_T3))) + geom_histogram(binwidth = 1)
+ggplotly(hhhh) 
+
+#lst_T4
+lst_T4_count <- dplyr::count(data, lst_T4)
+knitr::kable(lst_T4_count) 
+iiii <- ggplot(data = data, mapping = aes(x = lst_T4, fill = factor(lst_T4))) + geom_histogram(binwidth = 1) 
+ggplotly(iiii) 
+
+#aes_T1
+aes_T1_count <- dplyr::count(data, aes_T1)
+knitr::kable(aes_T1_count) 
+jjjj <- ggplot(data = data, mapping = aes(x = aes_T1, fill = factor(aes_T1))) + geom_histogram(binwidth = 1) 
+ggplotly(jjjj) 
+
+#aes_T2
+aes_T2_count <- dplyr::count(data, aes_T2)
+knitr::kable(aes_T2_count) 
+kkkk <- ggplot(data = data, mapping = aes(x = aes_T2, fill = factor(aes_T2))) + geom_histogram(binwidth = 1) 
+ggplotly(kkkk) 
+
+#aes_T3
+aes_T3_count <- dplyr::count(data, aes_T3)
+knitr::kable(aes_T3_count) 
+llll <- ggplot(data = data, mapping = aes(x = aes_T3, fill = factor(aes_T3))) + geom_histogram(binwidth = 1) 
+ggplotly(llll) 
+
+#aes_T4
+aes_T4_count <- dplyr::count(data, aes_T4)
+knitr::kable(aes_T4_count) 
+mmmm <- ggplot(data = data, mapping = aes(x = aes_T4, fill = factor(aes_T4))) + geom_histogram(binwidth = 1) 
+ggplotly(mmmm) 
+
+#hsc_T1
+hsc_T1_count <- dplyr::count(data, hsc_T1)
+knitr::kable(hsc_T1_count) 
+nnnn <- ggplot(data = data, mapping = aes(x = hsc_T1, fill = factor(hsc_T1))) + geom_histogram(binwidth = 0.1) 
+ggplotly(nnnn) 
+
+#hsc_T2
+hsc_T2_count <- dplyr::count(data, hsc_T2)
+knitr::kable(hsc_T2_count) 
+oooo <- ggplot(data = data, mapping = aes(x = hsc_T2, fill = factor(hsc_T2))) + geom_histogram(binwidth = 0.1) 
+ggplotly(oooo)
+
+#hsc_T3
+hsc_T3_count <- dplyr::count(data, hsc_T3)
+knitr::kable(hsc_T3_count) 
+pppp <- ggplot(data = data, mapping = aes(x = hsc_T3, fill = factor(hsc_T3))) + geom_histogram(binwidth = 0.1) 
+ggplotly(pppp) 
+
+#hsc_T4
+hsc_T4_count <- dplyr::count(data, hsc_T4)
+knitr::kable(hsc_T4_count) 
+qqqq <- ggplot(data = data, mapping = aes(x = hsc_T4, fill = factor(hsc_T4))) + geom_histogram(binwidth = 0.1) 
+ggplotly(qqqq) 
+
+#wb_T1
+wb_T1_count <- dplyr::count(data, wb_T1)
+knitr::kable(wb_T1_count)
+rrrr <- ggplot(data = data, mapping = aes(x = wb_T1, fill = factor(wb_T1))) + geom_histogram(binwidth = 0.5)
+ggplotly(rrrr)
+
+#wb_T2
+wb_T2_count <- dplyr::count(data, wb_T2)
+knitr::kable(wb_T2_count) 
+ssss <- ggplot(data = data, mapping = aes(x = wb_T2, fill = factor(wb_T2))) + geom_histogram(binwidth = 0.5) 
+ggplotly(ssss) 
+
+#wb_T3
+wb_T3_count <- dplyr::count(data, wb_T3)
+knitr::kable(wb_T3_count) 
+tttt <- ggplot(data = data, mapping = aes(x = wb_T3, fill = factor(wb_T3))) + geom_histogram(binwidth = 0.5) 
+ggplotly(tttt) 
+
+#wb_T4
+wb_T4_count <- dplyr::count(data, wb_T4)
+knitr::kable(wb_T4_count) 
+uuuu <- ggplot(data = data, mapping = aes(x = wb_T4, fill = factor(wb_T4))) + geom_histogram(binwidth = 0.5)
+ggplotly(uuuu)
+
+#ev_T1
+ev_T1_count <- dplyr::count(data, ev_T1)
+knitr::kable(ev_T1_count)
+vvvv <- ggplot(data = data, mapping = aes(x = ev_T1, fill = factor(ev_T1))) + geom_histogram(binwidth = 0.5) 
+ggplotly(vvvv) 
+
+#ev_T2
+ev_T2_count <- dplyr::count(data, ev_T2)
+knitr::kable(ev_T2_count) 
+wwww <- ggplot(data = data, mapping = aes(x = ev_T2, fill = factor(ev_T2))) + geom_histogram(binwidth = 0.5) 
+ggplotly(wwww) 
+
+#ev_T3
+ev_T3_count <- dplyr::count(data, ev_T3)
+knitr::kable(ev_T3_count) 
+panda <- ggplot(data = data, mapping = aes(x = ev_T3, fill = factor(ev_T3))) + geom_histogram(binwidth = 0.5) 
+ggplotly(panda) 
+
+#ev_T4
+ev_T4_count <- dplyr::count(data, ev_T4)
+knitr::kable(ev_T4_count) 
+yyyy <- ggplot(data = data, mapping = aes(x = ev_T4, fill = factor(ev_T4))) + geom_histogram(binwidth = 0.5) 
+ggplotly(yyyy) 
+
+#hsc_onemonth
+hsc_onemonth_count <- dplyr::count(data, hsc_onemonth)
+knitr::kable(hsc_onemonth_count)
+zzzz <- ggplot(data = data, mapping = aes(x = hsc_onemonth, fill = factor(hsc_onemonth))) + geom_histogram(binwidth = 0.3) + guides(fill = "none") 
+ggplotly(zzzz) 
+
+#wb_onemonth
+wb_onemonth_count <- dplyr::count(data, wb_onemonth)
+knitr::kable(wb_onemonth_count) 
+A <- ggplot(data = data, mapping = aes(x = wb_onemonth, fill = factor(wb_onemonth))) + geom_histogram(binwidth = 0.3) + guides(fill = "none") 
+ggplotly(A) 
+
+#ev_onemonth
+ev_onemonth_count <- dplyr::count(data, ev_onemonth)
+knitr::kable(ev_onemonth_count)
+B <- ggplot(data = data, mapping = aes(x = ev_onemonth, fill = factor(ev_onemonth))) + geom_histogram(binwidth = 0.3) + guides(fill = "none") #視覚化
+ggplotly(B)
+```
+
+

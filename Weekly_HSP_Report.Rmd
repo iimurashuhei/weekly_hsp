@@ -21,8 +21,11 @@ knitr::opts_chunk$set(echo = TRUE, fig.height = 12, fig.width = 12, warning = FA
 
   * （1）前処理
   * （2）相関分析
-  * （3）時点別のWidaman's Approach（メイン分析）
-  * （4）1か月間のWidaman's Approach（下位分析）
+  * （3）Roisman's Approach（主効果モデルと交互作用効果モデルのF比を算出するため）
+  * （4）時点別のWidaman's Approach（メイン分析）
+  * （5）1か月間のWidaman's Approach（下位分析）
+  * （6）Widaman's Approachのグラフ
+  * （7）Additional Analysis
 
 # （1）前処理
 
@@ -1108,6 +1111,51 @@ alpha(data[, c(81:85)]) #alpha .90
 omega(data[, c(81:85)],1,fm="ml") #omega hierarchical=.90, omega total=.90
 ```
 
+## 1-6. 欠損値分析
+```{r missing, include = TRUE}
+library(BaylorEdPsych)
+missingdata <- data %>% dplyr::select(hsc_T1,hsc_T2,hsc_T3,hsc_T4,wb_T1,wb_T2,wb_T3,wb_T4,ev_T1,ev_T2,ev_T3,ev_T4,hsc_onemonth,wb_onemonth,ev_onemonth) #欠損値分析用のデータセット作成
+LittleMCAR(missingdata)
+```
+
+## 1-7. 級内相関係数
+```{r icc, include = TRUE}
+#irrパッケージ読み込み
+library(irr)
+
+#ICCに必要な変数だけのデータセットを作成
+icc_hsc <- data %>% dplyr::select("hsc_T1", "hsc_T2", "hsc_T3", "hsc_T4")
+icc_wb <- data %>% dplyr::select("wb_T1", "wb_T2", "wb_T3", "wb_T4")
+icc_ev <- data %>% dplyr::select("ev_T1", "ev_T2", "ev_T3", "ev_T4")
+
+#ICC算出
+icc(icc_hsc, "twoway", "agreement") #ICC = 0.70 [0.61 < ICC < 0.77]
+icc(icc_wb, "twoway", "agreement") #ICC = 0.66 [0.57 < ICC < 0.74]
+icc(icc_ev, "twoway", "agreement") #ICC = 0.18 [0.10 < ICC < 0.30]
+```
+
+## 1-8. 4時点にわたる自己相関係数
+```{r autocorr, include = TRUE}
+#HSC
+cor.test(icc_hsc$hsc_T1, icc_hsc$hsc_T2)
+cor.test(icc_hsc$hsc_T1, icc_hsc$hsc_T3)
+cor.test(icc_hsc$hsc_T1, icc_hsc$hsc_T4)
+cor.test(icc_hsc$hsc_T2, icc_hsc$hsc_T3)
+cor.test(icc_hsc$hsc_T3, icc_hsc$hsc_T4)
+#WB
+cor.test(icc_wb$wb_T1, icc_wb$wb_T2)
+cor.test(icc_wb$wb_T1, icc_wb$wb_T3)
+cor.test(icc_wb$wb_T1, icc_wb$wb_T4)
+cor.test(icc_wb$wb_T2, icc_wb$wb_T3)
+cor.test(icc_wb$wb_T3, icc_wb$wb_T4)
+#LE
+cor.test(icc_ev$ev_T1, icc_ev$ev_T2)
+cor.test(icc_ev$ev_T1, icc_ev$ev_T3)
+cor.test(icc_ev$ev_T1, icc_ev$ev_T4)
+cor.test(icc_ev$ev_T2, icc_ev$ev_T3)
+cor.test(icc_ev$ev_T3, icc_ev$ev_T4)
+```
+
 # （2）相関係数の算出
 ```{r corheatmap, include = TRUE}
 cordata <- data %>% dplyr::select(hsc_T1,hsc_T2,hsc_T3,hsc_T4,wb_T1,wb_T2,wb_T3,wb_T4,ev_T1,ev_T2,ev_T3,ev_T4,hsc_onemonth,wb_onemonth,ev_onemonth) %>% drop_na()
@@ -1125,8 +1173,1809 @@ ggplot(data = melted_cormat, aes(Var2, Var1, fill = value))+
                        name="Pearson\nCorrelation") +
   theme_minimal()+ 
   theme(axis.text.x = element_text(angle = 45, vjust = 1, 
-                                   size = 12, hjust = 1))+
-  coord_fixed()
+                                   size = 12, hjust = 1)) + coord_fixed()
+```
+
+# （3）Roisman's Approach（主効果モデルと交互作用モデルのF比を参照するため）
+  * その他の時点の結果については、Rコードを確認ください。    
+  * RoS testはRoismanのappを使用します：[https://www.yourpersonality.net/interaction/ros.pl]
+
+```{r pequod, include = TRUE}
+library(pequod)
+```  
+
+## 3-0. 独立変数の中心化
+```{r centered, include = TRUE}
+data_c <- data %>% drop_na() %>% select_("hsc_T1", "hsc_T2", "hsc_T3", "hsc_T4", "wb_T1", "wb_T2", "wb_T3", "wb_T4", "ev_T1", "ev_T2", "ev_T3", "ev_T4", "hsc_onemonth", "wb_onemonth", "ev_onemonth") #na削除したうえで必要な変数抽出
+data_c$hsc_T1_c <- data_c$hsc_T1 - mean(data_c$hsc_T1) #hsc_T1の中心化
+data_c$hsc_T2_c <- data_c$hsc_T2 - mean(data_c$hsc_T2) #hsc_T2の中心化
+data_c$hsc_T3_c <- data_c$hsc_T3 - mean(data_c$hsc_T3) #hsc_T3の中心化
+data_c$hsc_T4_c <- data_c$hsc_T4 - mean(data_c$hsc_T4) #hsc_T4の中心化
+data_c$ev_T1_c <- data_c$ev_T1 - mean(data_c$ev_T1) #ev_T1の中心化
+data_c$ev_T2_c <- data_c$ev_T2 - mean(data_c$ev_T2) #ev_T2の中心化
+data_c$ev_T3_c <- data_c$ev_T3 - mean(data_c$ev_T3) #ev_T3の中心化
+data_c$ev_T4_c <- data_c$ev_T4 - mean(data_c$ev_T4) #ev_T4の中心化
+data_c$hsc_onemonth_c  <- data_c$hsc_onemonth - mean(data_c$hsc_onemonth) #hsc_onemonthの中心化
+data_c$ev_onemonth_c  <- data_c$ev_onemonth - mean(data_c$ev_onemonth) #ev_onemonthの中心化
+```
+
+## 3-1. 1時点目の分析
+```{r roismant1, include = TRUE}
+#pequodで分析版
+model_t1 <- lmres(wb_T1 ~ ev_T1 + hsc_T1  + ev_T1:hsc_T1, centered = c("wb_T1", "ev_T1", "hsc_T1"), data = data) #交互作用の検討
+summary(model_t1)
+
+#通常のlmで分析版（ステップ1：主効果モデル）
+model_t1s1 <- lm(data_c$wb_T1 ~ data_c$ev_T1_c + data_c$hsc_T1_c)
+summary(model_t1s1)
+AIC(model_t1s1)
+BIC(model_t1s1)
+
+#通常のlmで分析版（ステップ2：交互作用モデル）
+model_t1s2 <- lm(data_c$wb_T1 ~ data_c$ev_T1_c + data_c$hsc_T1_c + data_c$ev_T1_c:data_c$hsc_T1_c)
+summary(model_t1s2)
+AIC(model_t1s2)
+BIC(model_t1s2)
+anova(model_t1s1, model_t1s2) #R^2の増加量の検定
+```
+
+## 3-2. 2時点目の分析
+```{r roismant2, include = TRUE}
+#pequodで分析版
+model_t2 <- lmres(wb_T2 ~ ev_T2 + hsc_T2  + ev_T2:hsc_T2, centered = c("wb_T2", "ev_T2", "hsc_T2"), data = data) #交互作用の検討
+summary(model_t2)
+
+#通常のlmで分析版（ステップ1：主効果モデル）
+model_t2s1 <- lm(data_c$wb_T2 ~ data_c$ev_T2_c + data_c$hsc_T2_c)
+summary(model_t2s1)
+AIC(model_t2s1)
+BIC(model_t2s1)
+
+#通常のlmで分析版（ステップ2：交互作用モデル）
+model_t2s2 <- lm(data_c$wb_T2 ~ data_c$ev_T2_c + data_c$hsc_T2_c + data_c$ev_T2_c:data_c$hsc_T2_c)
+summary(model_t2s2)
+AIC(model_t2s2)
+BIC(model_t2s2)
+anova(model_t2s1, model_t2s2) #R^2の増加量の検定
+```
+
+```{r roisman, include = TRUE}
+#### p<.10で交互作用が有意だったので単純傾斜検定
+model_ss <- simpleSlope(model_t2, pred ="ev_T2", mod1 = "hsc_T2")
+summary(model_ss) #High HSCだけ係数が有意 b = 0.26, p<.001
+PlotSlope(model_ss)
+
+#### RoS testをRoismanのアプリで行うために共分散を算出
+
+#reg <- lm(data_c$wb_T2_c ~ data_c$ev_T2_c + data_c$hsc_T2_c + #data_c$ev_T2_c:data_c$hsc_T2_c)
+#summary(reg)
+#round(hccm(reg, type = "hc0"), digits = 3)
+
+#必要なパラメタのメモ
+#* Intercept (b0) = -0.024 →切片
+#* Variable X (b1) = 0.31 →環境変数（独立変数）の回帰係数
+#* Variable Z (b2) = -0.04 →感受性変数（調整変数）の回帰係数
+#* Interaction XZ (b3) = 0.17 →交互作用項の回帰係数
+#* Variance parameter b1 = 0.05^2 = 0.003 →たぶんstand.errorの2乗のことだと思う
+#* Variance parameter b2 = 0.11^2 = 0.012 →たぶんstand.errorの2乗のことだと思う
+#* Variance parameter b3 = 0.06^2 = 0.004 →たぶんstand.errorの2乗のことだと思う
+#* Covariance parameters b1 b3 = -0.001
+#* Covariance parameters b2 b3 = -0.001
+#* Degress of freedom (df) = 75 →アプリの説明によればN - 独立変数の数k - 1で計算される（この場合、79 - 3 - 1 = 75）
+```  
+
+
+![RoS on X testing](C:\Users\Iimura Shuhei\Documents\weekly_hsp\RoStest_T2.png)
+
+## 3-3. 3時点目の分析
+```{r roismant3, include = TRUE}
+#pequodで分析版
+model_t3 <- lmres(wb_T3 ~ ev_T3 + hsc_T3  + ev_T3:hsc_T3, centered = c("wb_T3", "ev_T3", "hsc_T3"), data = data) #交互作用の検討
+summary(model_t3)
+
+#通常のlmで分析版（ステップ1：主効果モデル）
+model_t3s1 <- lm(data_c$wb_T3 ~ data_c$ev_T3_c + data_c$hsc_T3_c)
+summary(model_t3s1)
+AIC(model_t3s1)
+BIC(model_t3s1)
+
+#通常のlmで分析版（ステップ2：交互作用モデル）
+model_t3s2 <- lm(data_c$wb_T3 ~ data_c$ev_T3_c + data_c$hsc_T3_c + data_c$ev_T3_c:data_c$hsc_T3_c)
+summary(model_t3s2)
+AIC(model_t3s2)
+BIC(model_t3s2)
+anova(model_t3s1, model_t3s2) #R^2の増加量の検定
+```
+
+## 3-4. 4時点目の分析
+```{r roismant4, include = TRUE}
+#pequodで分析版
+model_t4 <- lmres(wb_T4 ~ ev_T4 + hsc_T4  + ev_T4:hsc_T4, centered = c("wb_T4", "ev_T4", "hsc_T4"), data = data) #交互作用の検討
+summary(model_t4)
+
+#通常のlmで分析版（ステップ1：主効果モデル）
+model_t4s1 <- lm(data_c$wb_T4 ~ data_c$ev_T4_c + data_c$hsc_T4_c)
+summary(model_t4s1)
+AIC(model_t4s1)
+BIC(model_t4s1)
+
+#通常のlmで分析版（ステップ2：交互作用モデル）
+model_t4s2 <- lm(data_c$wb_T4 ~ data_c$ev_T4_c + data_c$hsc_T4_c + data_c$ev_T4_c:data_c$hsc_T4_c)
+summary(model_t4s2)
+AIC(model_t4s2)
+BIC(model_t4s2)
+anova(model_t4s1, model_t4s2) #R^2の増加量の検定
+```
+
+## 3-5. 1ヵ月間の分析
+```{r roisman1m, include = TRUE}
+#pequodで分析版
+model_onemonth <- lmres(wb_onemonth ~ ev_onemonth + hsc_onemonth  + ev_onemonth:hsc_onemonth, centered = c("wb_onemonth", "ev_onemonth", "hsc_onemonth"), data = data) #交互作用の検討
+summary(model_onemonth)
+
+#通常のlmで分析版（ステップ1：主効果モデル）
+model_1ms1 <- lm(data_c$wb_onemonth ~ data_c$ev_onemonth_c + data_c$hsc_onemonth_c)
+summary(model_1ms1)
+AIC(model_1ms1)
+BIC(model_1ms1)
+
+#通常のlmで分析版（ステップ2：交互作用モデル）
+model_1ms2 <- lm(data_c$wb_onemonth ~ data_c$ev_onemonth_c + data_c$hsc_onemonth_c + data_c$ev_onemonth_c:data_c$hsc_onemonth_c)
+summary(model_1ms2)
+AIC(model_1ms2)
+BIC(model_1ms2)
+anova(model_1ms1, model_1ms2) #R^2の増加量の検定
+```
+
+
+
+# （4）時点ごとのWidaman's Approach
+  * RMarkdown内で分析に使用した計算コードをもとに、数式を表現してくれるパッケージがある！⇒ [https://bookdown.org/yihui/rmarkdown-cookbook/equatiomatic.html]  
+  * 論文執筆の際、Methodで数式を例示するために役に立ちそう！！
+
+```{r soil, include = TRUE}
+library(soilphysics) #非線形モデルで準R2を算出するため使用
+```
+
+## 4-1. 1時点目：弱い差次感受性
+```{r t1weekdiff, include = TRUE}
+weak_diff_T1 <- nls(wb_T1 ~ B0 + B1*(ev_T1 - C) + B3*((ev_T1 - C)*hsc_T1), 
+                 data = data,
+                 start = list(B0 = 90, B1 = 0, C = 20, B3 = -1))
+summary(weak_diff_T1) 
+
+AIC(weak_diff_T1)
+BIC(weak_diff_T1)
+pred <- predict(weak_diff_T1) #非線形モデルで準R2を算出する
+n <- length(pred)
+res <- resid(weak_diff_T1)
+w <- weights(weak_diff_T1)
+if (is.null(w)) w <- rep(1, n)
+rss <- sum(w * res ^ 2)
+resp <- pred + res
+center <- weighted.mean(resp, w)
+r.df <- summary(weak_diff_T1)$df[2]
+int.df <- 1
+tss <- sum(w * (resp - center)^2)
+r.sq <- 1 - rss/tss
+adj.r.sq <- 1 - (1 - r.sq) * (n - int.df) / r.df
+out <- list(pseudo.R.squared = r.sq,
+            adj.R.squared = adj.r.sq)
+out
+```
+
+## 4-2. 1時点目：強い差次感受性
+```{r t1stdiff, include = TRUE}
+strong_diff_T1 <- nls(wb_T1 ~ B0 + 0*(ev_T1 - C) + B3*((ev_T1 - C)*hsc_T1),
+                   data = data,
+                   start = list(B0 = 90, C = 20, B3 = -1))
+summary(strong_diff_T1)
+AIC(strong_diff_T1)
+BIC(strong_diff_T1)
+pred <- predict(strong_diff_T1) #非線形モデルで準R2を算出する
+n <- length(pred)
+res <- resid(strong_diff_T1)
+w <- weights(strong_diff_T1)
+if (is.null(w)) w <- rep(1, n)
+rss <- sum(w * res ^ 2)
+resp <- pred + res
+center <- weighted.mean(resp, w)
+r.df <- summary(strong_diff_T1)$df[2]
+int.df <- 1
+tss <- sum(w * (resp - center)^2)
+r.sq <- 1 - rss/tss
+adj.r.sq <- 1 - (1 - r.sq) * (n - int.df) / r.df
+out <- list(pseudo.R.squared = r.sq,
+            adj.R.squared = adj.r.sq)
+out
+```
+
+## 4-3. 1時点目：弱い素因ストレス
+```{r t1weekds, include = TRUE}
+weak_diathesis_T1 <- nls(wb_T1 ~ B0 + B1*(ev_T1 + 3) + B3*((ev_T1 + 3)*hsc_T1), #+3は環境変数の最大値(C on X)
+                      data = data,
+                      start = list(B0 = 90, B1 = 0, B3 = -1)) #Cの初期値は設定不要
+summary(weak_diathesis_T1)
+
+AIC(weak_diathesis_T1)
+BIC(weak_diathesis_T1)
+pred <- predict(weak_diathesis_T1) #非線形モデルで準R2を算出する
+n <- length(pred)
+res <- resid(weak_diathesis_T1)
+w <- weights(weak_diathesis_T1)
+if (is.null(w)) w <- rep(1, n)
+rss <- sum(w * res ^ 2)
+resp <- pred + res
+center <- weighted.mean(resp, w)
+r.df <- summary(weak_diathesis_T1)$df[2]
+int.df <- 1
+tss <- sum(w * (resp - center)^2)
+r.sq <- 1 - rss/tss
+adj.r.sq <- 1 - (1 - r.sq) * (n - int.df) / r.df
+out <- list(pseudo.R.squared = r.sq,
+            adj.R.squared = adj.r.sq)
+out
+```
+
+## 4-4. 1時点目：強い素因ストレス
+```{r t1stds, include = TRUE}
+strong_diathesis_T1 <- nls(wb_T1 ~ B0 + 0*(ev_T1 + 3) + B3*((ev_T1 + 3)*hsc_T1),
+                        data = data,
+                        start = list(B0 = 90, B3 = -1))
+summary(strong_diathesis_T1)
+AIC(strong_diathesis_T1)
+BIC(strong_diathesis_T1)
+pred <- predict(strong_diathesis_T1) #非線形モデルで準R2を算出する
+n <- length(pred)
+res <- resid(strong_diathesis_T1)
+w <- weights(strong_diathesis_T1)
+if (is.null(w)) w <- rep(1, n)
+rss <- sum(w * res ^ 2)
+resp <- pred + res
+center <- weighted.mean(resp, w)
+r.df <- summary(strong_diathesis_T1)$df[2]
+int.df <- 1
+tss <- sum(w * (resp - center)^2)
+r.sq <- 1 - rss/tss
+adj.r.sq <- 1 - (1 - r.sq) * (n - int.df) / r.df
+out <- list(pseudo.R.squared = r.sq,
+            adj.R.squared = adj.r.sq)
+out
+```
+
+## 4-5. 1時点目：弱いヴァンテージ感受性
+```{r t1weekvs, include = TRUE}
+weak_vs_T1 <- nls(wb_T1 ~ B0 + B1*(ev_T1 - 3) + B3*((ev_T1 - 3)*hsc_T1), #-3は環境変数の最小値（C on X）
+               data = data,
+               start = list(B0 = 90, B1 = 0, B3 = -1))
+summary(weak_vs_T1)
+AIC(weak_vs_T1)
+BIC(weak_vs_T1)
+pred <- predict(weak_vs_T1) #非線形モデルで準R2を算出する
+n <- length(pred)
+res <- resid(weak_vs_T1)
+w <- weights(weak_vs_T1)
+if (is.null(w)) w <- rep(1, n)
+rss <- sum(w * res ^ 2)
+resp <- pred + res
+center <- weighted.mean(resp, w)
+r.df <- summary(weak_vs_T1)$df[2]
+int.df <- 1
+tss <- sum(w * (resp - center)^2)
+r.sq <- 1 - rss/tss
+adj.r.sq <- 1 - (1 - r.sq) * (n - int.df) / r.df
+out <- list(pseudo.R.squared = r.sq,
+            adj.R.squared = adj.r.sq)
+out
+```
+
+## 4-6. 1時点目：強いヴァンテージ感受性
+```{r t1stvs, include = TRUE}
+strong_vs_T1 <- nls(wb_T1 ~ B0 + 0*(ev_T1 - 3) + B3*((ev_T1 - 3)*hsc_T1),
+                 data = data,
+                 start = list(B0 = 90, B3 = -1))
+summary(strong_vs_T1)
+AIC(strong_vs_T1)
+BIC(strong_vs_T1)
+pred <- predict(strong_vs_T1) #非線形モデルで準R2を算出する
+n <- length(pred)
+res <- resid(strong_vs_T1)
+w <- weights(strong_vs_T1)
+if (is.null(w)) w <- rep(1, n)
+rss <- sum(w * res ^ 2)
+resp <- pred + res
+center <- weighted.mean(resp, w)
+r.df <- summary(strong_vs_T1)$df[2]
+int.df <- 1
+tss <- sum(w * (resp - center)^2)
+r.sq <- 1 - rss/tss
+adj.r.sq <- 1 - (1 - r.sq) * (n - int.df) / r.df
+out <- list(pseudo.R.squared = r.sq,
+            adj.R.squared = adj.r.sq)
+out
+```
+
+## 4-7. 2時点目：弱い差次感受性
+```{r t2weekdiff, include = TRUE}
+weak_diff_T2 <- nls(wb_T2 ~ B0 + B1*(ev_T2 - C) + B3*((ev_T2 - C)*hsc_T2), 
+                    data = data,
+                    start = list(B0 = 90, B1 = 0, C = 20, B3 = -1))
+summary(weak_diff_T2) 
+
+AIC(weak_diff_T2)
+BIC(weak_diff_T2)
+pred <- predict(weak_diff_T2) #非線形モデルで準R2を算出する
+n <- length(pred)
+res <- resid(weak_diff_T2)
+w <- weights(weak_diff_T2)
+if (is.null(w)) w <- rep(1, n)
+rss <- sum(w * res ^ 2)
+resp <- pred + res
+center <- weighted.mean(resp, w)
+r.df <- summary(weak_diff_T2)$df[2]
+int.df <- 1
+tss <- sum(w * (resp - center)^2)
+r.sq <- 1 - rss/tss
+adj.r.sq <- 1 - (1 - r.sq) * (n - int.df) / r.df
+out <- list(pseudo.R.squared = r.sq,
+            adj.R.squared = adj.r.sq)
+out
+```
+
+## 4-8. 2時点目：強い差次感受性
+```{r t2stdiff, include = TRUE}
+strong_diff_T2 <- nls(wb_T2 ~ B0 + 0*(ev_T2 - C) + B3*((ev_T2 - C)*hsc_T2),
+                      data = data,
+                      start = list(B0 = 90, C = 20, B3 = -1))
+summary(strong_diff_T2)
+AIC(strong_diff_T2)
+BIC(strong_diff_T2)
+pred <- predict(strong_diff_T2) #非線形モデルで準R2を算出する
+n <- length(pred)
+res <- resid(strong_diff_T2)
+w <- weights(strong_diff_T2)
+if (is.null(w)) w <- rep(1, n)
+rss <- sum(w * res ^ 2)
+resp <- pred + res
+center <- weighted.mean(resp, w)
+r.df <- summary(strong_diff_T2)$df[2]
+int.df <- 1
+tss <- sum(w * (resp - center)^2)
+r.sq <- 1 - rss/tss
+adj.r.sq <- 1 - (1 - r.sq) * (n - int.df) / r.df
+out <- list(pseudo.R.squared = r.sq,
+            adj.R.squared = adj.r.sq)
+out
+```
+
+## 4-9. 2時点目：弱い素因ストレス
+```{r t2weekds, include = TRUE}
+weak_diathesis_T2 <- nls(wb_T2 ~ B0 + B1*(ev_T2 + 3) + B3*((ev_T2 + 3)*hsc_T2), #+3は環境変数の最大値(C on X)
+                         data = data,
+                         start = list(B0 = 90, B1 = 0, B3 = -1)) #Cの初期値は設定不要
+summary(weak_diathesis_T2)
+AIC(weak_diathesis_T2)
+BIC(weak_diathesis_T2)
+pred <- predict(weak_diathesis_T2) #非線形モデルで準R2を算出する
+n <- length(pred)
+res <- resid(weak_diathesis_T2)
+w <- weights(weak_diathesis_T2)
+if (is.null(w)) w <- rep(1, n)
+rss <- sum(w * res ^ 2)
+resp <- pred + res
+center <- weighted.mean(resp, w)
+r.df <- summary(weak_diathesis_T2)$df[2]
+int.df <- 1
+tss <- sum(w * (resp - center)^2)
+r.sq <- 1 - rss/tss
+adj.r.sq <- 1 - (1 - r.sq) * (n - int.df) / r.df
+out <- list(pseudo.R.squared = r.sq,
+            adj.R.squared = adj.r.sq)
+out
+```
+
+## 4-10. 2時点目：強い素因ストレス
+```{r t2stds, include = TRUE}
+strong_diathesis_T2 <- nls(wb_T2 ~ B0 + 0*(ev_T2 + 3) + B3*((ev_T2 + 3)*hsc_T2),
+                           data = data,
+                           start = list(B0 = 90, B3 = -1))
+summary(strong_diathesis_T2)
+AIC(strong_diathesis_T2)
+BIC(strong_diathesis_T2)
+pred <- predict(strong_diathesis_T2) #非線形モデルで準R2を算出する
+n <- length(pred)
+res <- resid(strong_diathesis_T2)
+w <- weights(strong_diathesis_T2)
+if (is.null(w)) w <- rep(1, n)
+rss <- sum(w * res ^ 2)
+resp <- pred + res
+center <- weighted.mean(resp, w)
+r.df <- summary(strong_diathesis_T2)$df[2]
+int.df <- 1
+tss <- sum(w * (resp - center)^2)
+r.sq <- 1 - rss/tss
+adj.r.sq <- 1 - (1 - r.sq) * (n - int.df) / r.df
+out <- list(pseudo.R.squared = r.sq,
+            adj.R.squared = adj.r.sq)
+out
+```
+
+## 4-11. 2時点目：弱いヴァンテージ感受性
+```{r t2weekvs, include = TRUE}
+weak_vs_T2 <- nls(wb_T2 ~ B0 + B1*(ev_T2 - 3) + B3*((ev_T2 - 3)*hsc_T2), #-3は環境変数の最小値（C on X）
+                  data = data,
+                  start = list(B0 = 90, B1 = 0, B3 = -1))
+summary(weak_vs_T2)
+AIC(weak_vs_T2)
+BIC(weak_vs_T2)
+pred <- predict(weak_vs_T2) #非線形モデルで準R2を算出する
+n <- length(pred)
+res <- resid(weak_vs_T2)
+w <- weights(weak_vs_T2)
+if (is.null(w)) w <- rep(1, n)
+rss <- sum(w * res ^ 2)
+resp <- pred + res
+center <- weighted.mean(resp, w)
+r.df <- summary(weak_vs_T2)$df[2]
+int.df <- 1
+tss <- sum(w * (resp - center)^2)
+r.sq <- 1 - rss/tss
+adj.r.sq <- 1 - (1 - r.sq) * (n - int.df) / r.df
+out <- list(pseudo.R.squared = r.sq,
+            adj.R.squared = adj.r.sq)
+out
+```
+
+## 4-12. 2時点目：強いヴァンテージ感受性
+```{r t2stvs, include = TRUE}
+strong_vs_T2 <- nls(wb_T2 ~ B0 + 0*(ev_T2 - 3) + B3*((ev_T2 - 3)*hsc_T2),
+                    data = data,
+                    start = list(B0 = 90, B3 = -1))
+summary(strong_vs_T2)
+AIC(strong_vs_T2)
+BIC(strong_vs_T2)
+pred <- predict(strong_vs_T2) #非線形モデルで準R2を算出する
+n <- length(pred)
+res <- resid(strong_vs_T2)
+w <- weights(strong_vs_T2)
+if (is.null(w)) w <- rep(1, n)
+rss <- sum(w * res ^ 2)
+resp <- pred + res
+center <- weighted.mean(resp, w)
+r.df <- summary(strong_vs_T2)$df[2]
+int.df <- 1
+tss <- sum(w * (resp - center)^2)
+r.sq <- 1 - rss/tss
+adj.r.sq <- 1 - (1 - r.sq) * (n - int.df) / r.df
+out <- list(pseudo.R.squared = r.sq,
+            adj.R.squared = adj.r.sq)
+out
+```
+
+## 4-13. 3時点目：弱い差次感受性
+```{r t3weekdiff, include = TRUE}
+weak_diff_T3 <- nls(wb_T3 ~ B0 + B1*(ev_T3 - C) + B3*((ev_T3 - C)*hsc_T3), 
+                    data = data,
+                    start = list(B0 = 90, B1 = 0, C = 20, B3 = -1))
+summary(weak_diff_T3) 
+
+AIC(weak_diff_T3)
+BIC(weak_diff_T3)
+pred <- predict(weak_diff_T3) #非線形モデルで準R2を算出する
+n <- length(pred)
+res <- resid(weak_diff_T3)
+w <- weights(weak_diff_T3)
+if (is.null(w)) w <- rep(1, n)
+rss <- sum(w * res ^ 2)
+resp <- pred + res
+center <- weighted.mean(resp, w)
+r.df <- summary(weak_diff_T3)$df[2]
+int.df <- 1
+tss <- sum(w * (resp - center)^2)
+r.sq <- 1 - rss/tss
+adj.r.sq <- 1 - (1 - r.sq) * (n - int.df) / r.df
+out <- list(pseudo.R.squared = r.sq,
+            adj.R.squared = adj.r.sq)
+out
+```
+
+## 4-14. 3時点目：強い差次感受性
+```{r t3stdiff, include = TRUE}
+strong_diff_T3 <- nls(wb_T3 ~ B0 + 0*(ev_T3 - C) + B3*((ev_T3 - C)*hsc_T3),
+                      data = data,
+                      start = list(B0 = 90, C = 20, B3 = -1))
+summary(strong_diff_T3)
+AIC(strong_diff_T3)
+BIC(strong_diff_T3)
+pred <- predict(strong_diff_T3) #非線形モデルで準R2を算出する
+n <- length(pred)
+res <- resid(strong_diff_T3)
+w <- weights(strong_diff_T3)
+if (is.null(w)) w <- rep(1, n)
+rss <- sum(w * res ^ 2)
+resp <- pred + res
+center <- weighted.mean(resp, w)
+r.df <- summary(strong_diff_T3)$df[2]
+int.df <- 1
+tss <- sum(w * (resp - center)^2)
+r.sq <- 1 - rss/tss
+adj.r.sq <- 1 - (1 - r.sq) * (n - int.df) / r.df
+out <- list(pseudo.R.squared = r.sq,
+            adj.R.squared = adj.r.sq)
+out
+```
+
+## 4-15. 3時点目：弱い素因ストレス
+```{r t3weekds, include = TRUE}
+weak_diathesis_T3 <- nls(wb_T3 ~ B0 + B1*(ev_T3 + 3) + B3*((ev_T3 + 3)*hsc_T3), #+3は環境変数の最大値(C on X)
+                         data = data,
+                         start = list(B0 = 90, B1 = 0, B3 = -1)) #Cの初期値は設定不要
+summary(weak_diathesis_T3)
+
+AIC(weak_diathesis_T3)
+BIC(weak_diathesis_T3)
+pred <- predict(weak_diathesis_T3) #非線形モデルで準R2を算出する
+n <- length(pred)
+res <- resid(weak_diathesis_T3)
+w <- weights(weak_diathesis_T3)
+if (is.null(w)) w <- rep(1, n)
+rss <- sum(w * res ^ 2)
+resp <- pred + res
+center <- weighted.mean(resp, w)
+r.df <- summary(weak_diathesis_T3)$df[2]
+int.df <- 1
+tss <- sum(w * (resp - center)^2)
+r.sq <- 1 - rss/tss
+adj.r.sq <- 1 - (1 - r.sq) * (n - int.df) / r.df
+out <- list(pseudo.R.squared = r.sq,
+            adj.R.squared = adj.r.sq)
+out
+```
+
+## 4-16. 3時点目：強い素因ストレス
+```{r t3stds, include = TRUE}
+strong_diathesis_T3 <- nls(wb_T3 ~ B0 + 0*(ev_T3 + 3) + B3*((ev_T3 + 3)*hsc_T3),
+                           data = data,
+                           start = list(B0 = 90, B3 = -1))
+summary(strong_diathesis_T3)
+AIC(strong_diathesis_T3)
+BIC(strong_diathesis_T3)
+pred <- predict(strong_diathesis_T3) #非線形モデルで準R2を算出する
+n <- length(pred)
+res <- resid(strong_diathesis_T3)
+w <- weights(strong_diathesis_T3)
+if (is.null(w)) w <- rep(1, n)
+rss <- sum(w * res ^ 2)
+resp <- pred + res
+center <- weighted.mean(resp, w)
+r.df <- summary(strong_diathesis_T3)$df[2]
+int.df <- 1
+tss <- sum(w * (resp - center)^2)
+r.sq <- 1 - rss/tss
+adj.r.sq <- 1 - (1 - r.sq) * (n - int.df) / r.df
+out <- list(pseudo.R.squared = r.sq,
+            adj.R.squared = adj.r.sq)
+out
+```
+
+## 4-17. 3時点目：弱いヴァンテージ感受性
+```{r t3weekvs, include = TRUE}
+weak_vs_T3 <- nls(wb_T3 ~ B0 + B1*(ev_T3 - 3) + B3*((ev_T3 - 3)*hsc_T3), #-3は環境変数の最小値（C on X）
+                  data = data,
+                  start = list(B0 = 90, B1 = 0, B3 = -1))
+summary(weak_vs_T3)
+AIC(weak_vs_T3)
+BIC(weak_vs_T3)
+pred <- predict(weak_vs_T3) #非線形モデルで準R2を算出する
+n <- length(pred)
+res <- resid(weak_vs_T3)
+w <- weights(weak_vs_T3)
+if (is.null(w)) w <- rep(1, n)
+rss <- sum(w * res ^ 2)
+resp <- pred + res
+center <- weighted.mean(resp, w)
+r.df <- summary(weak_vs_T3)$df[2]
+int.df <- 1
+tss <- sum(w * (resp - center)^2)
+r.sq <- 1 - rss/tss
+adj.r.sq <- 1 - (1 - r.sq) * (n - int.df) / r.df
+out <- list(pseudo.R.squared = r.sq,
+            adj.R.squared = adj.r.sq)
+out
+```
+
+## 4-18. 3時点目：強いヴァンテージ感受性
+```{r t3stvs, include = TRUE}
+strong_vs_T3 <- nls(wb_T3 ~ B0 + 0*(ev_T3 - 3) + B3*((ev_T3 - 3)*hsc_T3),
+                    data = data,
+                    start = list(B0 = 90, B3 = -1))
+summary(strong_vs_T3)
+AIC(strong_vs_T3)
+BIC(strong_vs_T3)
+pred <- predict(strong_vs_T3) #非線形モデルで準R2を算出する
+n <- length(pred)
+res <- resid(strong_vs_T3)
+w <- weights(strong_vs_T3)
+if (is.null(w)) w <- rep(1, n)
+rss <- sum(w * res ^ 2)
+resp <- pred + res
+center <- weighted.mean(resp, w)
+r.df <- summary(strong_vs_T3)$df[2]
+int.df <- 1
+tss <- sum(w * (resp - center)^2)
+r.sq <- 1 - rss/tss
+adj.r.sq <- 1 - (1 - r.sq) * (n - int.df) / r.df
+out <- list(pseudo.R.squared = r.sq,
+            adj.R.squared = adj.r.sq)
+out
+```
+
+## 4-19. 4時点目：弱い差次感受性
+```{r t4weekdiff, include = TRUE}
+weak_diff_T4 <- nls(wb_T4 ~ B0 + B1*(ev_T4 - C) + B3*((ev_T4 - C)*hsc_T4), 
+                    data = data,
+                    start = list(B0 = 90, B1 = 0, C = 20, B3 = -1))
+summary(weak_diff_T4) 
+
+AIC(weak_diff_T4)
+BIC(weak_diff_T4)
+pred <- predict(weak_diff_T4) #非線形モデルで準R2を算出する
+n <- length(pred)
+res <- resid(weak_diff_T4)
+w <- weights(weak_diff_T4)
+if (is.null(w)) w <- rep(1, n)
+rss <- sum(w * res ^ 2)
+resp <- pred + res
+center <- weighted.mean(resp, w)
+r.df <- summary(weak_diff_T4)$df[2]
+int.df <- 1
+tss <- sum(w * (resp - center)^2)
+r.sq <- 1 - rss/tss
+adj.r.sq <- 1 - (1 - r.sq) * (n - int.df) / r.df
+out <- list(pseudo.R.squared = r.sq,
+            adj.R.squared = adj.r.sq)
+out
+```
+
+## 4-20. 4時点目：強い差次感受性
+```{r t4stdiff, include = TRUE}
+strong_diff_T4 <- nls(wb_T4 ~ B0 + 0*(ev_T4 - C) + B3*((ev_T4 - C)*hsc_T4),
+                      data = data,
+                      start = list(B0 = 90, C = 20, B3 = -1))
+summary(strong_diff_T4)
+AIC(strong_diff_T4)
+BIC(strong_diff_T4)
+pred <- predict(strong_diff_T4) #非線形モデルで準R2を算出する
+n <- length(pred)
+res <- resid(strong_diff_T4)
+w <- weights(strong_diff_T4)
+if (is.null(w)) w <- rep(1, n)
+rss <- sum(w * res ^ 2)
+resp <- pred + res
+center <- weighted.mean(resp, w)
+r.df <- summary(strong_diff_T4)$df[2]
+int.df <- 1
+tss <- sum(w * (resp - center)^2)
+r.sq <- 1 - rss/tss
+adj.r.sq <- 1 - (1 - r.sq) * (n - int.df) / r.df
+out <- list(pseudo.R.squared = r.sq,
+            adj.R.squared = adj.r.sq)
+out
+```
+
+## 4-21. 4時点目：弱い素因ストレス
+```{r t4weekds, include = TRUE}
+weak_diathesis_T4 <- nls(wb_T4 ~ B0 + B1*(ev_T4 + 3) + B3*((ev_T4 + 3)*hsc_T4), #+3は環境変数の最大値(C on X)
+                         data = data,
+                         start = list(B0 = 90, B1 = 0, B3 = -1)) #Cの初期値は設定不要
+summary(weak_diathesis_T4)
+
+AIC(weak_diathesis_T4)
+BIC(weak_diathesis_T4)
+pred <- predict(weak_diathesis_T4) #非線形モデルで準R2を算出する
+n <- length(pred)
+res <- resid(weak_diathesis_T4)
+w <- weights(weak_diathesis_T4)
+if (is.null(w)) w <- rep(1, n)
+rss <- sum(w * res ^ 2)
+resp <- pred + res
+center <- weighted.mean(resp, w)
+r.df <- summary(weak_diathesis_T4)$df[2]
+int.df <- 1
+tss <- sum(w * (resp - center)^2)
+r.sq <- 1 - rss/tss
+adj.r.sq <- 1 - (1 - r.sq) * (n - int.df) / r.df
+out <- list(pseudo.R.squared = r.sq,
+            adj.R.squared = adj.r.sq)
+out
+```
+
+## 4-22. 4時点目：強い素因ストレス
+```{r t4stds, include = TRUE}
+strong_diathesis_T4 <- nls(wb_T4 ~ B0 + 0*(ev_T4 + 3) + B3*((ev_T4 + 3)*hsc_T4),
+                           data = data,
+                           start = list(B0 = 90, B3 = -1))
+summary(strong_diathesis_T4)
+AIC(strong_diathesis_T4)
+BIC(strong_diathesis_T4)
+pred <- predict(strong_diathesis_T4) #非線形モデルで準R2を算出する
+n <- length(pred)
+res <- resid(strong_diathesis_T4)
+w <- weights(strong_diathesis_T4)
+if (is.null(w)) w <- rep(1, n)
+rss <- sum(w * res ^ 2)
+resp <- pred + res
+center <- weighted.mean(resp, w)
+r.df <- summary(strong_diathesis_T4)$df[2]
+int.df <- 1
+tss <- sum(w * (resp - center)^2)
+r.sq <- 1 - rss/tss
+adj.r.sq <- 1 - (1 - r.sq) * (n - int.df) / r.df
+out <- list(pseudo.R.squared = r.sq,
+            adj.R.squared = adj.r.sq)
+out
+```
+
+## 4-23. 4時点目：弱いヴァンテージ感受性
+```{r t4weekvs, include = TRUE}
+weak_vs_T4 <- nls(wb_T4 ~ B0 + B1*(ev_T4 - 3) + B3*((ev_T4 - 3)*hsc_T4), #-3は環境変数の最小値（C on X）
+                  data = data,
+                  start = list(B0 = 90, B1 = 0, B3 = -1))
+summary(weak_vs_T4)
+AIC(weak_vs_T4)
+BIC(weak_vs_T4)
+pred <- predict(weak_vs_T4) #非線形モデルで準R2を算出する
+n <- length(pred)
+res <- resid(weak_vs_T4)
+w <- weights(weak_vs_T4)
+if (is.null(w)) w <- rep(1, n)
+rss <- sum(w * res ^ 2)
+resp <- pred + res
+center <- weighted.mean(resp, w)
+r.df <- summary(weak_vs_T4)$df[2]
+int.df <- 1
+tss <- sum(w * (resp - center)^2)
+r.sq <- 1 - rss/tss
+adj.r.sq <- 1 - (1 - r.sq) * (n - int.df) / r.df
+out <- list(pseudo.R.squared = r.sq,
+            adj.R.squared = adj.r.sq)
+out
+```
+
+## 4-24. 4時点目：強いヴァンテージ感受性
+```{r t4stvs, include = TRUE}
+strong_vs_T4 <- nls(wb_T4 ~ B0 + 0*(ev_T4 - 3) + B3*((ev_T4 - 3)*hsc_T4),
+                    data = data,
+                    start = list(B0 = 90, B3 = -1))
+summary(strong_vs_T4)
+AIC(strong_vs_T4)
+BIC(strong_vs_T4)
+pred <- predict(strong_vs_T4) #非線形モデルで準R2を算出する
+n <- length(pred)
+res <- resid(strong_vs_T4)
+w <- weights(strong_vs_T4)
+if (is.null(w)) w <- rep(1, n)
+rss <- sum(w * res ^ 2)
+resp <- pred + res
+center <- weighted.mean(resp, w)
+r.df <- summary(strong_vs_T4)$df[2]
+int.df <- 1
+tss <- sum(w * (resp - center)^2)
+r.sq <- 1 - rss/tss
+adj.r.sq <- 1 - (1 - r.sq) * (n - int.df) / r.df
+out <- list(pseudo.R.squared = r.sq,
+            adj.R.squared = adj.r.sq)
+out
+```
+
+# （5）1か月間のWidaman's Approach
+
+## 5-1. 弱い差次感受性
+```{r weekdiff, include = TRUE}
+weak_diff_om <- nls(wb_onemonth ~ B0 + B1*(ev_onemonth - C) + B3*((ev_onemonth - C)*hsc_onemonth), 
+                    data = data,
+                    start = list(B0 = 90, B1 = 0, C = 20, B3 = -1))
+summary(weak_diff_om) 
+
+AIC(weak_diff_om)
+BIC(weak_diff_om)
+pred <- predict(weak_diff_om) #非線形モデルで準R2を算出する
+n <- length(pred)
+res <- resid(weak_diff_om)
+w <- weights(weak_diff_om)
+if (is.null(w)) w <- rep(1, n)
+rss <- sum(w * res ^ 2)
+resp <- pred + res
+center <- weighted.mean(resp, w)
+r.df <- summary(weak_diff_om)$df[2]
+int.df <- 1
+tss <- sum(w * (resp - center)^2)
+r.sq <- 1 - rss/tss
+adj.r.sq <- 1 - (1 - r.sq) * (n - int.df) / r.df
+out <- list(pseudo.R.squared = r.sq,
+            adj.R.squared = adj.r.sq)
+out
+```
+
+## 5-2. 強い差次感受性
+```{r stdiff, include = TRUE}
+strong_diff_om <- nls(wb_onemonth ~ B0 + 0*(ev_onemonth - C) + B3*((ev_onemonth - C)*hsc_onemonth),
+                      data = data,
+                      start = list(B0 = 90, C = 20, B3 = -1))
+summary(strong_diff_om)
+AIC(strong_diff_om)
+BIC(strong_diff_om)
+pred <- predict(strong_diff_om) #非線形モデルで準R2を算出する
+n <- length(pred)
+res <- resid(strong_diff_om)
+w <- weights(strong_diff_om)
+if (is.null(w)) w <- rep(1, n)
+rss <- sum(w * res ^ 2)
+resp <- pred + res
+center <- weighted.mean(resp, w)
+r.df <- summary(strong_diff_om)$df[2]
+int.df <- 1
+tss <- sum(w * (resp - center)^2)
+r.sq <- 1 - rss/tss
+adj.r.sq <- 1 - (1 - r.sq) * (n - int.df) / r.df
+out <- list(pseudo.R.squared = r.sq,
+            adj.R.squared = adj.r.sq)
+out
+```
+
+## 5-3. 弱い素因ストレス
+```{r weekds, include = TRUE}
+weak_diathesis_om <- nls(wb_onemonth ~ B0 + B1*(ev_onemonth + 3) + B3*((ev_onemonth + 3)*hsc_onemonth), #+3は環境変数の最大値(C on X)
+                         data = data,
+                         start = list(B0 = 90, B1 = 0, B3 = -1)) #Cの初期値は設定不要
+summary(weak_diathesis_om)
+
+AIC(weak_diathesis_om)
+BIC(weak_diathesis_om)
+pred <- predict(weak_diathesis_om) #非線形モデルで準R2を算出する
+n <- length(pred)
+res <- resid(weak_diathesis_om)
+w <- weights(weak_diathesis_om)
+if (is.null(w)) w <- rep(1, n)
+rss <- sum(w * res ^ 2)
+resp <- pred + res
+center <- weighted.mean(resp, w)
+r.df <- summary(weak_diathesis_om)$df[2]
+int.df <- 1
+tss <- sum(w * (resp - center)^2)
+r.sq <- 1 - rss/tss
+adj.r.sq <- 1 - (1 - r.sq) * (n - int.df) / r.df
+out <- list(pseudo.R.squared = r.sq,
+            adj.R.squared = adj.r.sq)
+out
+```
+
+## 5-4. 強い素因ストレス
+```{r stds, include = TRUE}
+strong_diathesis_om <- nls(wb_onemonth ~ B0 + 0*(ev_onemonth + 3) + B3*((ev_onemonth + 3)*hsc_onemonth),
+                           data = data,
+                           start = list(B0 = 90, B3 = -1))
+summary(strong_diathesis_om)
+AIC(strong_diathesis_om)
+BIC(strong_diathesis_om)
+pred <- predict(strong_diathesis_om) #非線形モデルで準R2を算出する
+n <- length(pred)
+res <- resid(strong_diathesis_om)
+w <- weights(strong_diathesis_om)
+if (is.null(w)) w <- rep(1, n)
+rss <- sum(w * res ^ 2)
+resp <- pred + res
+center <- weighted.mean(resp, w)
+r.df <- summary(strong_diathesis_om)$df[2]
+int.df <- 1
+tss <- sum(w * (resp - center)^2)
+r.sq <- 1 - rss/tss
+adj.r.sq <- 1 - (1 - r.sq) * (n - int.df) / r.df
+out <- list(pseudo.R.squared = r.sq,
+            adj.R.squared = adj.r.sq)
+out
+```
+
+## 5-5. 弱いヴァンテージ感受性
+```{r weekvs, include = TRUE}
+weak_vs_om <- nls(wb_onemonth ~ B0 + B1*(ev_onemonth - 3) + B3*((ev_onemonth - 3)*hsc_onemonth), #-3は環境変数の最小値（C on X）
+                  data = data,
+                  start = list(B0 = 90, B1 = 0, B3 = -1))
+summary(weak_vs_om)
+AIC(weak_vs_om)
+BIC(weak_vs_om)
+pred <- predict(weak_vs_om) #非線形モデルで準R2を算出する
+n <- length(pred)
+res <- resid(weak_vs_om)
+w <- weights(weak_vs_om)
+if (is.null(w)) w <- rep(1, n)
+rss <- sum(w * res ^ 2)
+resp <- pred + res
+center <- weighted.mean(resp, w)
+r.df <- summary(weak_vs_om)$df[2]
+int.df <- 1
+tss <- sum(w * (resp - center)^2)
+r.sq <- 1 - rss/tss
+adj.r.sq <- 1 - (1 - r.sq) * (n - int.df) / r.df
+out <- list(pseudo.R.squared = r.sq,
+            adj.R.squared = adj.r.sq)
+out
+```
+
+## 5-6. 強いヴァンテージ感受性
+```{r stvs, include = TRUE}
+strong_vs_om <- nls(wb_onemonth ~ B0 + 0*(ev_onemonth - 3) + B3*((ev_onemonth - 3)*hsc_onemonth),
+                    data = data,
+                    start = list(B0 = 90, B3 = -1))
+summary(strong_vs_om)
+AIC(strong_vs_om)
+BIC(strong_vs_om)
+pred <- predict(strong_vs_om) #非線形モデルで準R2を算出する
+n <- length(pred)
+res <- resid(strong_vs_om)
+w <- weights(strong_vs_om)
+if (is.null(w)) w <- rep(1, n)
+rss <- sum(w * res ^ 2)
+resp <- pred + res
+center <- weighted.mean(resp, w)
+r.df <- summary(strong_vs_om)$df[2]
+int.df <- 1
+tss <- sum(w * (resp - center)^2)
+r.sq <- 1 - rss/tss
+adj.r.sq <- 1 - (1 - r.sq) * (n - int.df) / r.df
+out <- list(pseudo.R.squared = r.sq,
+            adj.R.squared = adj.r.sq)
+out
+```
+
+
+
+# （6）Widaman's Approachのグラフ
+  * 以下のように作図します。
+  
+![HowToCreateWidamanFigure](C:\Users\Iimura Shuhei\Documents\weekly_hsp\HowToCreateWidamanFigure.png)
+
+## 1時点目の作図
+```{r weekoneplot, include = TRUE}
+# 1時点目は強い素因ストレスモデルが支持された
+
+# B0（切片）=2.12
+# B1（傾き：低感受性群）= 0.00
+# C（交差点）=3.00
+# B3（傾き：高感受性群）= 0.03
+
+#png("figure/week1.png", width = 1200, height = 1200)
+p <- ggplot(data, aes(ev_T1, wb_T1)) + 
+  geom_abline(intercept = 2.03, slope = 0.03, size = 1) +  
+  geom_abline(intercept = 2.12, slope = 0.00, size = 1, linetype = 2) + 
+  ylim(1.5, 2.5) + xlim(-3, 3)
+p + theme(plot.subtitle = element_text(vjust = 1), 
+          plot.caption = element_text(vjust = 1), 
+          axis.line = element_line(colour = "azure4", 
+                                   linetype = "solid"), axis.ticks = element_line(size = 1,linetype = "blank")) 
+#dev.off()
+```
+
+## 2時点目の作図
+```{r weektwoplot, include = TRUE}
+# 2時点目は強いヴァンテージ感受性モデルが支持された
+
+# B0（切片）= 3.36
+# B1（傾き：低感受性群）= 0.00
+# C（交差点）= -3.00
+# B3（傾き：高感受性群）= 0.04
+
+#png("figure/week2.png", width = 1200, height = 1200)
+p <- ggplot(data, aes(ev_T2, wb_T2)) + 
+  geom_abline(intercept = 3.48, slope = 0.04, size = 1) +  
+  geom_abline(intercept = 3.36, slope = 0.00, size = 1, linetype = 2) + 
+  ylim(3.0, 4.0) + xlim(-3, 3)
+p + theme(plot.subtitle = element_text(vjust = 1), 
+          plot.caption = element_text(vjust = 1), 
+          axis.line = element_line(colour = "azure4", 
+                                   linetype = "solid"), axis.ticks = element_line(size = 1,linetype = "blank")) 
+#dev.off()
+```
+
+## 3時点目の作図
+```{r weekthreeplot, include = TRUE}
+# 3時点目は強いヴァンテージ感受性モデルが支持された
+
+# B0（切片）= 3.36
+# B1（傾き：低感受性群）= 0.00
+# C（交差点）= -3.00
+# B3（傾き：高感受性群）= 0.04
+
+#png("figure/week3.png", width = 1200, height = 1200)
+p <- ggplot(data, aes(ev_T3, wb_T3)) + 
+  geom_abline(intercept = 3.48, slope = 0.04, size = 1) +  
+  geom_abline(intercept = 3.36, slope = 0.00, size = 1, linetype = 2) + 
+  ylim(3.0, 4.0) + xlim(-3, 3)
+p + theme(plot.subtitle = element_text(vjust = 1), 
+          plot.caption = element_text(vjust = 1), 
+          axis.line = element_line(colour = "azure4", 
+                                   linetype = "solid"), axis.ticks = element_line(size = 1,linetype = "blank")) 
+#dev.off()
+```
+
+## 4時点目の作図
+```{r weekfourplot, include = TRUE}
+# 4時点目は弱い素因ストレスモデルが支持された
+
+# B0（切片）= 2.20
+# B1（傾き：低感受性群）= 0.64
+# C（交差点）= 3.00
+# B3（傾き：高感受性群）= -0.09
+
+#png("figure/week4.png", width = 1200, height = 1200)
+p <- ggplot(data, aes(ev_T4, wb_T4)) + 
+  geom_abline(intercept = 2.47, slope = -0.09, size = 1) +  
+  geom_abline(intercept = 0.28, slope = 0.64, size = 1, linetype = 2) +  
+  ylim(0.0, 3.0) + xlim(-3, 3)
+p + theme(plot.subtitle = element_text(vjust = 1), 
+          plot.caption = element_text(vjust = 1), 
+          axis.line = element_line(colour = "azure4", 
+                                   linetype = "solid"), axis.ticks = element_line(size = 1,linetype = "blank"))
+#dev.off()
+```
+
+## 1か月全体の作図
+```{r monthplot, include = TRUE}
+# 1か月全体では強いヴァンテージ感受性モデルが支持された
+
+# B0（切片）= 3.49
+# B1（傾き：低感受性群）= 0.00
+# C（交差点）= 3.00
+# B3（傾き：高感受性群）= 0.05
+
+#png("figure/week3.png", width = 1200, height = 1200)
+p <- ggplot(data, aes(ev_onemonth, wb_onemonth)) + 
+  geom_abline(intercept = 3.64, slope = 0.05, size = 1) +  
+  geom_abline(intercept = 3.49, slope = 0.00, size = 1, linetype = 2) +  
+  ylim(3.0, 4.0) + xlim(-3, 3)
+p + theme(plot.subtitle = element_text(vjust = 1), 
+          plot.caption = element_text(vjust = 1), 
+          axis.line = element_line(colour = "azure4", 
+                                   linetype = "solid"), axis.ticks = element_line(size = 1,linetype = "blank")) 
+#dev.off()
+```
+
+![WidamanPlot](C:\Users\Iimura Shuhei\Documents\weekly_hsp\WidamanPlot.png)
+
+# （7）Additional Analysis
+  * Journal of Youth and Adolescenceの規定では、メインの分析結果が頑健かどうかを確かめるためにAdditional Analysisのセクションを設けることを推奨している。そのため、この雑誌に投稿するときのことを踏まえて今回の分析でも追加的な分析を行う。
+  * 具体的には、 t-1時点のGxEがt時点の従属変数を予測するかどうか検討して、上記のWidamanモデルの頑健性を確認する。
+
+
+## 7-1. Roisoman Approach
+
+### 7-1-1. T1 -> T2
+```{r rosimanaddt2, include=TRUE}
+#通常のlmで分析版（ステップ1：主効果モデル）
+model_addt2s1 <- lm(data_c$wb_T2 ~ data_c$ev_T1_c + data_c$hsc_T1_c)
+summary(model_addt2s1)
+AIC(model_addt2s1)
+BIC(model_addt2s1)
+
+#通常のlmで分析版（ステップ2：交互作用モデル）
+model_addt2s2 <- lm(data_c$wb_T2 ~ data_c$ev_T1_c + data_c$hsc_T1_c + data_c$ev_T1_c:data_c$hsc_T1_c)
+summary(model_addt2s2)
+AIC(model_addt2s2)
+BIC(model_addt2s2)
+anova(model_addt2s1, model_addt2s2) #R^2の増加量の検定
+```
+
+### 7-1-2. T2 -> T3
+```{r rosimanaddt3, include=TRUE}
+#通常のlmで分析版（ステップ1：主効果モデル）
+model_addt3s1 <- lm(data_c$wb_T3 ~ data_c$ev_T2_c + data_c$hsc_T2_c)
+summary(model_addt3s1)
+AIC(model_addt3s1)
+BIC(model_addt3s1)
+
+#通常のlmで分析版（ステップ2：交互作用モデル）
+model_addt3s2 <- lm(data_c$wb_T3 ~ data_c$ev_T2_c + data_c$hsc_T2_c + data_c$ev_T2_c:data_c$hsc_T2_c)
+summary(model_addt3s2)
+AIC(model_addt3s2)
+BIC(model_addt3s2)
+anova(model_addt3s1, model_addt3s2) #R^2の増加量の検定
+```
+
+### 7-1-3. T3 -> T4
+```{r rosimanaddt4, include=TRUE}
+#通常のlmで分析版（ステップ1：主効果モデル）
+model_addt4s1 <- lm(data_c$wb_T4 ~ data_c$ev_T3_c + data_c$hsc_T3_c)
+summary(model_addt4s1)
+AIC(model_addt4s1)
+BIC(model_addt4s1)
+
+#通常のlmで分析版（ステップ2：交互作用モデル）
+model_addt4s2 <- lm(data_c$wb_T4 ~ data_c$ev_T3_c + data_c$hsc_T3_c + data_c$ev_T3_c:data_c$hsc_T3_c)
+summary(model_addt4s2)
+AIC(model_addt4s2)
+BIC(model_addt4s2)
+anova(model_addt4s1, model_addt4s2) #R^2の増加量の検定
+```
+
+
+## 7-2. Widaman Approach
+  
+## T1->T2：弱い差次感受性
+```{r a1, include=TRUE}
+weak_diff_T1T2 <- nls(wb_T2 ~ B0 + B1*(ev_T1 - C) + B3*((ev_T1 - C)*hsc_T1), 
+                    data = data,
+                    start = list(B0 = 90, B1 = 0, C = 20, B3 = -1))
+summary(weak_diff_T1T2) 
+
+AIC(weak_diff_T1T2)
+BIC(weak_diff_T1T2)
+pred <- predict(weak_diff_T1T2) #非線形モデルで準R2を算出する
+n <- length(pred)
+res <- resid(weak_diff_T1T2)
+w <- weights(weak_diff_T1T2)
+if (is.null(w)) w <- rep(1, n)
+rss <- sum(w * res ^ 2)
+resp <- pred + res
+center <- weighted.mean(resp, w)
+r.df <- summary(weak_diff_T1T2)$df[2]
+int.df <- 1
+tss <- sum(w * (resp - center)^2)
+r.sq <- 1 - rss/tss
+adj.r.sq <- 1 - (1 - r.sq) * (n - int.df) / r.df
+out <- list(pseudo.R.squared = r.sq,
+            adj.R.squared = adj.r.sq)
+out
+```
+
+## T1->T2：強い差次感受性
+```{r a2, include=TRUE}
+strong_diff_T1T2 <- nls(wb_T2 ~ B0 + 0*(ev_T1 - C) + B3*((ev_T1 - C)*hsc_T1),
+                      data = data,
+                      start = list(B0 = 90, C = 20, B3 = -1))
+summary(strong_diff_T1T2)
+AIC(strong_diff_T1T2)
+BIC(strong_diff_T1T2)
+pred <- predict(strong_diff_T1T2) #非線形モデルで準R2を算出する
+n <- length(pred)
+res <- resid(strong_diff_T1T2)
+w <- weights(strong_diff_T1T2)
+if (is.null(w)) w <- rep(1, n)
+rss <- sum(w * res ^ 2)
+resp <- pred + res
+center <- weighted.mean(resp, w)
+r.df <- summary(strong_diff_T1T2)$df[2]
+int.df <- 1
+tss <- sum(w * (resp - center)^2)
+r.sq <- 1 - rss/tss
+adj.r.sq <- 1 - (1 - r.sq) * (n - int.df) / r.df
+out <- list(pseudo.R.squared = r.sq,
+            adj.R.squared = adj.r.sq)
+out
+```
+
+## T1->T2：弱い素因ストレス
+```{r a3, include=TRUE}
+weak_diathesis_T1T2 <- nls(wb_T2 ~ B0 + B1*(ev_T1 - 3) + B3*((ev_T1 - 3)*hsc_T1),
+                           data = data,
+                           start = list(B0 = 90, B1 = 0, B3 = -1)) #Cの初期値は設定不要
+summary(weak_diathesis_T1T2)
+
+AIC(weak_diathesis_T1T2)
+BIC(weak_diathesis_T1T2)
+pred <- predict(weak_diathesis_T1T2) #非線形モデルで準R2を算出する
+n <- length(pred)
+res <- resid(weak_diathesis_T1T2)
+w <- weights(weak_diathesis_T1T2)
+if (is.null(w)) w <- rep(1, n)
+rss <- sum(w * res ^ 2)
+resp <- pred + res
+center <- weighted.mean(resp, w)
+r.df <- summary(weak_diathesis_T1T2)$df[2]
+int.df <- 1
+tss <- sum(w * (resp - center)^2)
+r.sq <- 1 - rss/tss
+adj.r.sq <- 1 - (1 - r.sq) * (n - int.df) / r.df
+out <- list(pseudo.R.squared = r.sq,
+            adj.R.squared = adj.r.sq)
+out
+```
+
+## T1->T2：強い素因ストレス
+```{r a4, include=TRUE}
+strong_diathesis_T1T2 <- nls(wb_T2 ~ B0 + 0*(ev_T1 - 3) + B3*((ev_T1 - 3)*hsc_T1),
+                           data = data,
+                           start = list(B0 = 90, B3 = -1))
+summary(strong_diathesis_T1T2)
+AIC(strong_diathesis_T1T2)
+BIC(strong_diathesis_T1T2)
+pred <- predict(strong_diathesis_T1T2) #非線形モデルで準R2を算出する
+n <- length(pred)
+res <- resid(strong_diathesis_T1T2)
+w <- weights(strong_diathesis_T1T2)
+if (is.null(w)) w <- rep(1, n)
+rss <- sum(w * res ^ 2)
+resp <- pred + res
+center <- weighted.mean(resp, w)
+r.df <- summary(strong_diathesis_T1T2)$df[2]
+int.df <- 1
+tss <- sum(w * (resp - center)^2)
+r.sq <- 1 - rss/tss
+adj.r.sq <- 1 - (1 - r.sq) * (n - int.df) / r.df
+out <- list(pseudo.R.squared = r.sq,
+            adj.R.squared = adj.r.sq)
+out
+```
+
+## T1->T2：弱いヴァンテージ感受性
+```{r a5, include=TRUE}
+weak_vs_T1T2 <- nls(wb_T2 ~ B0 + B1*(ev_T1 + 3) + B3*((ev_T1 + 3)*hsc_T1), #+3は環境変数の最小値（C on X）→ -(c)なので+3となる
+                  data = data,
+                  start = list(B0 = 90, B1 = 0, B3 = -1))
+summary(weak_vs_T1T2)
+AIC(weak_vs_T1T2)
+BIC(weak_vs_T1T2)
+pred <- predict(weak_vs_T1T2) #非線形モデルで準R2を算出する
+n <- length(pred)
+res <- resid(weak_vs_T1T2)
+w <- weights(weak_vs_T1T2)
+if (is.null(w)) w <- rep(1, n)
+rss <- sum(w * res ^ 2)
+resp <- pred + res
+center <- weighted.mean(resp, w)
+r.df <- summary(weak_vs_T1T2)$df[2]
+int.df <- 1
+tss <- sum(w * (resp - center)^2)
+r.sq <- 1 - rss/tss
+adj.r.sq <- 1 - (1 - r.sq) * (n - int.df) / r.df
+out <- list(pseudo.R.squared = r.sq,
+            adj.R.squared = adj.r.sq)
+out
+```
+
+## T1->T2：強いヴァンテージ感受性
+```{r a6, include=TRUE}
+strong_vs_T1T2 <- nls(wb_T2 ~ B0 + 0*(ev_T1 + 3) + B3*((ev_T1 + 3)*hsc_T1),
+                    data = data,
+                    start = list(B0 = 90, B3 = -1))
+summary(strong_vs_T1T2)
+AIC(strong_vs_T1T2)
+BIC(strong_vs_T1T2)
+pred <- predict(strong_vs_T1T2) #非線形モデルで準R2を算出する
+n <- length(pred)
+res <- resid(strong_vs_T1T2)
+w <- weights(strong_vs_T1T2)
+if (is.null(w)) w <- rep(1, n)
+rss <- sum(w * res ^ 2)
+resp <- pred + res
+center <- weighted.mean(resp, w)
+r.df <- summary(strong_vs_T1T2)$df[2]
+int.df <- 1
+tss <- sum(w * (resp - center)^2)
+r.sq <- 1 - rss/tss
+adj.r.sq <- 1 - (1 - r.sq) * (n - int.df) / r.df
+out <- list(pseudo.R.squared = r.sq,
+            adj.R.squared = adj.r.sq)
+out
+```
+
+## T2->T3：弱い差次感受性
+```{r b1, include=TRUE}
+weak_diff_T2T3 <- nls(wb_T3 ~ B0 + B1*(ev_T2 - C) + B3*((ev_T2 - C)*hsc_T2), 
+                      data = data,
+                      start = list(B0 = 90, B1 = 0, C = 20, B3 = -1))
+summary(weak_diff_T2T3) 
+
+AIC(weak_diff_T2T3)
+BIC(weak_diff_T2T3)
+pred <- predict(weak_diff_T2T3) #非線形モデルで準R2を算出する
+n <- length(pred)
+res <- resid(weak_diff_T2T3)
+w <- weights(weak_diff_T2T3)
+if (is.null(w)) w <- rep(1, n)
+rss <- sum(w * res ^ 2)
+resp <- pred + res
+center <- weighted.mean(resp, w)
+r.df <- summary(weak_diff_T2T3)$df[2]
+int.df <- 1
+tss <- sum(w * (resp - center)^2)
+r.sq <- 1 - rss/tss
+adj.r.sq <- 1 - (1 - r.sq) * (n - int.df) / r.df
+out <- list(pseudo.R.squared = r.sq,
+            adj.R.squared = adj.r.sq)
+out
+```
+
+## T2->T3：強い差次感受性
+```{r b2, include=TRUE}
+strong_diff_T2T3 <- nls(wb_T3 ~ B0 + 0*(ev_T2 - C) + B3*((ev_T2 - C)*hsc_T2),
+                        data = data,
+                        start = list(B0 = 90, C = 20, B3 = -1))
+summary(strong_diff_T2T3)
+AIC(strong_diff_T2T3)
+BIC(strong_diff_T2T3)
+pred <- predict(strong_diff_T2T3) #非線形モデルで準R2を算出する
+n <- length(pred)
+res <- resid(strong_diff_T2T3)
+w <- weights(strong_diff_T2T3)
+if (is.null(w)) w <- rep(1, n)
+rss <- sum(w * res ^ 2)
+resp <- pred + res
+center <- weighted.mean(resp, w)
+r.df <- summary(strong_diff_T2T3)$df[2]
+int.df <- 1
+tss <- sum(w * (resp - center)^2)
+r.sq <- 1 - rss/tss
+adj.r.sq <- 1 - (1 - r.sq) * (n - int.df) / r.df
+out <- list(pseudo.R.squared = r.sq,
+            adj.R.squared = adj.r.sq)
+out
+```
+
+## T2->T3：弱い素因ストレス
+```{r b3, include=TRUE}
+weak_diathesis_T2T3 <- nls(wb_T3 ~ B0 + B1*(ev_T2 - 3) + B3*((ev_T2 - 3)*hsc_T2), #+3は環境変数の最大値(C on X)
+                           data = data,
+                           start = list(B0 = 90, B1 = 0, B3 = -1)) #Cの初期値は設定不要
+summary(weak_diathesis_T2T3)
+
+AIC(weak_diathesis_T2T3)
+BIC(weak_diathesis_T2T3)
+pred <- predict(weak_diathesis_T2T3) #非線形モデルで準R2を算出する
+n <- length(pred)
+res <- resid(weak_diathesis_T2T3)
+w <- weights(weak_diathesis_T2T3)
+if (is.null(w)) w <- rep(1, n)
+rss <- sum(w * res ^ 2)
+resp <- pred + res
+center <- weighted.mean(resp, w)
+r.df <- summary(weak_diathesis_T2T3)$df[2]
+int.df <- 1
+tss <- sum(w * (resp - center)^2)
+r.sq <- 1 - rss/tss
+adj.r.sq <- 1 - (1 - r.sq) * (n - int.df) / r.df
+out <- list(pseudo.R.squared = r.sq,
+            adj.R.squared = adj.r.sq)
+out
+```
+
+## T2->T3：強い素因ストレス
+```{r b4, include=TRUE}
+strong_diathesis_T2T3 <- nls(wb_T3 ~ B0 + 0*(ev_T2 - 3) + B3*((ev_T2 - 3)*hsc_T2),
+                             data = data,
+                             start = list(B0 = 90, B3 = -1))
+summary(strong_diathesis_T2T3)
+AIC(strong_diathesis_T2T3)
+BIC(strong_diathesis_T2T3)
+pred <- predict(strong_diathesis_T2T3) #非線形モデルで準R2を算出する
+n <- length(pred)
+res <- resid(strong_diathesis_T2T3)
+w <- weights(strong_diathesis_T2T3)
+if (is.null(w)) w <- rep(1, n)
+rss <- sum(w * res ^ 2)
+resp <- pred + res
+center <- weighted.mean(resp, w)
+r.df <- summary(strong_diathesis_T2T3)$df[2]
+int.df <- 1
+tss <- sum(w * (resp - center)^2)
+r.sq <- 1 - rss/tss
+adj.r.sq <- 1 - (1 - r.sq) * (n - int.df) / r.df
+out <- list(pseudo.R.squared = r.sq,
+            adj.R.squared = adj.r.sq)
+out
+```
+
+## T2->T3：弱いヴァンテージ感受性
+```{r b5, include=TRUE}
+weak_vs_T2T3 <- nls(wb_T3 ~ B0 + B1*(ev_T2 + 3) + B3*((ev_T2 + 3)*hsc_T2), #-3は環境変数の最小値（C on X）
+                    data = data,
+                    start = list(B0 = 90, B1 = 0, B3 = -1))
+summary(weak_vs_T2T3)
+AIC(weak_vs_T2T3)
+BIC(weak_vs_T2T3)
+pred <- predict(weak_vs_T2T3) #非線形モデルで準R2を算出する
+n <- length(pred)
+res <- resid(weak_vs_T2T3)
+w <- weights(weak_vs_T2T3)
+if (is.null(w)) w <- rep(1, n)
+rss <- sum(w * res ^ 2)
+resp <- pred + res
+center <- weighted.mean(resp, w)
+r.df <- summary(weak_vs_T2T3)$df[2]
+int.df <- 1
+tss <- sum(w * (resp - center)^2)
+r.sq <- 1 - rss/tss
+adj.r.sq <- 1 - (1 - r.sq) * (n - int.df) / r.df
+out <- list(pseudo.R.squared = r.sq,
+            adj.R.squared = adj.r.sq)
+out
+```
+
+## T2->T3：強いヴァンテージ感受性
+```{r b6, include=TRUE}
+strong_vs_T2T3 <- nls(wb_T3 ~ B0 + 0*(ev_T2 + 3) + B3*((ev_T2 + 3)*hsc_T2),
+                      data = data,
+                      start = list(B0 = 90, B3 = -1))
+summary(strong_vs_T2T3)
+AIC(strong_vs_T2T3)
+BIC(strong_vs_T2T3)
+pred <- predict(strong_vs_T2T3) #非線形モデルで準R2を算出する
+n <- length(pred)
+res <- resid(strong_vs_T2T3)
+w <- weights(strong_vs_T2T3)
+if (is.null(w)) w <- rep(1, n)
+rss <- sum(w * res ^ 2)
+resp <- pred + res
+center <- weighted.mean(resp, w)
+r.df <- summary(strong_vs_T2T3)$df[2]
+int.df <- 1
+tss <- sum(w * (resp - center)^2)
+r.sq <- 1 - rss/tss
+adj.r.sq <- 1 - (1 - r.sq) * (n - int.df) / r.df
+out <- list(pseudo.R.squared = r.sq,
+            adj.R.squared = adj.r.sq)
+out
+```
+
+## T3->T4：弱い差次感受性
+```{r c1, include=TRUE}
+weak_diff_T3T4 <- nls(wb_T4 ~ B0 + B1*(ev_T3 - C) + B3*((ev_T3 - C)*hsc_T3), 
+                      data = data,
+                      start = list(B0 = 90, B1 = 0, C = 20, B3 = -1))
+summary(weak_diff_T3T4) 
+
+AIC(weak_diff_T3T4)
+BIC(weak_diff_T3T4)
+pred <- predict(weak_diff_T3T4) #非線形モデルで準R2を算出する
+n <- length(pred)
+res <- resid(weak_diff_T3T4)
+w <- weights(weak_diff_T3T4)
+if (is.null(w)) w <- rep(1, n)
+rss <- sum(w * res ^ 2)
+resp <- pred + res
+center <- weighted.mean(resp, w)
+r.df <- summary(weak_diff_T3T4)$df[2]
+int.df <- 1
+tss <- sum(w * (resp - center)^2)
+r.sq <- 1 - rss/tss
+adj.r.sq <- 1 - (1 - r.sq) * (n - int.df) / r.df
+out <- list(pseudo.R.squared = r.sq,
+            adj.R.squared = adj.r.sq)
+out
+```
+
+## T3->T4：強い差次感受性
+```{r c2, include=TRUE}
+strong_diff_T3T4 <- nls(wb_T4 ~ B0 + 0*(ev_T3 - C) + B3*((ev_T3 - C)*hsc_T3),
+                        data = data,
+                        start = list(B0 = 90, C = 20, B3 = -1))
+summary(strong_diff_T3T4)
+AIC(strong_diff_T3T4)
+BIC(strong_diff_T3T4)
+pred <- predict(strong_diff_T3T4) #非線形モデルで準R2を算出する
+n <- length(pred)
+res <- resid(strong_diff_T3T4)
+w <- weights(strong_diff_T3T4)
+if (is.null(w)) w <- rep(1, n)
+rss <- sum(w * res ^ 2)
+resp <- pred + res
+center <- weighted.mean(resp, w)
+r.df <- summary(strong_diff_T3T4)$df[2]
+int.df <- 1
+tss <- sum(w * (resp - center)^2)
+r.sq <- 1 - rss/tss
+adj.r.sq <- 1 - (1 - r.sq) * (n - int.df) / r.df
+out <- list(pseudo.R.squared = r.sq,
+            adj.R.squared = adj.r.sq)
+out
+```
+
+## T3->T4：弱い素因ストレス
+```{r c3, include=TRUE}
+weak_diathesis_T3T4 <- nls(wb_T4 ~ B0 + B1*(ev_T3 - 3) + B3*((ev_T3 - 3)*hsc_T3), #+3は環境変数の最大値(C on X)
+                           data = data,
+                           start = list(B0 = 90, B1 = 0, B3 = -1)) #Cの初期値は設定不要
+summary(weak_diathesis_T3T4)
+
+AIC(weak_diathesis_T3T4)
+BIC(weak_diathesis_T3T4)
+pred <- predict(weak_diathesis_T3T4) #非線形モデルで準R2を算出する
+n <- length(pred)
+res <- resid(weak_diathesis_T3T4)
+w <- weights(weak_diathesis_T3T4)
+if (is.null(w)) w <- rep(1, n)
+rss <- sum(w * res ^ 2)
+resp <- pred + res
+center <- weighted.mean(resp, w)
+r.df <- summary(weak_diathesis_T3T4)$df[2]
+int.df <- 1
+tss <- sum(w * (resp - center)^2)
+r.sq <- 1 - rss/tss
+adj.r.sq <- 1 - (1 - r.sq) * (n - int.df) / r.df
+out <- list(pseudo.R.squared = r.sq,
+            adj.R.squared = adj.r.sq)
+out
+```
+
+## T3->T4：強い素因ストレス
+```{r c4, include=TRUE}
+strong_diathesis_T3T4 <- nls(wb_T4 ~ B0 + 0*(ev_T3 - 3) + B3*((ev_T3 - 3)*hsc_T3),
+                             data = data,
+                             start = list(B0 = 90, B3 = -1))
+summary(strong_diathesis_T3T4)
+AIC(strong_diathesis_T3T4)
+BIC(strong_diathesis_T3T4)
+pred <- predict(strong_diathesis_T3T4) #非線形モデルで準R2を算出する
+n <- length(pred)
+res <- resid(strong_diathesis_T3T4)
+w <- weights(strong_diathesis_T3T4)
+if (is.null(w)) w <- rep(1, n)
+rss <- sum(w * res ^ 2)
+resp <- pred + res
+center <- weighted.mean(resp, w)
+r.df <- summary(strong_diathesis_T3T4)$df[2]
+int.df <- 1
+tss <- sum(w * (resp - center)^2)
+r.sq <- 1 - rss/tss
+adj.r.sq <- 1 - (1 - r.sq) * (n - int.df) / r.df
+out <- list(pseudo.R.squared = r.sq,
+            adj.R.squared = adj.r.sq)
+out
+```
+
+## T3->T4：弱いヴァンテージ感受性
+```{r c5, include=TRUE}
+weak_vs_T3T4 <- nls(wb_T4 ~ B0 + B1*(ev_T3 + 3) + B3*((ev_T3 + 3)*hsc_T3), #-3は環境変数の最小値（C on X）
+                    data = data,
+                    start = list(B0 = 90, B1 = 0, B3 = -1))
+summary(weak_vs_T3T4)
+AIC(weak_vs_T3T4)
+BIC(weak_vs_T3T4)
+pred <- predict(weak_vs_T3T4) #非線形モデルで準R2を算出する
+n <- length(pred)
+res <- resid(weak_vs_T3T4)
+w <- weights(weak_vs_T3T4)
+if (is.null(w)) w <- rep(1, n)
+rss <- sum(w * res ^ 2)
+resp <- pred + res
+center <- weighted.mean(resp, w)
+r.df <- summary(weak_vs_T3T4)$df[2]
+int.df <- 1
+tss <- sum(w * (resp - center)^2)
+r.sq <- 1 - rss/tss
+adj.r.sq <- 1 - (1 - r.sq) * (n - int.df) / r.df
+out <- list(pseudo.R.squared = r.sq,
+            adj.R.squared = adj.r.sq)
+out
+```
+
+## T3->T4：強いヴァンテージ感受性
+```{r c6, include=TRUE}
+strong_vs_T3T4 <- nls(wb_T4 ~ B0 + 0*(ev_T3 + 3) + B3*((ev_T3 + 3)*hsc_T3),
+                      data = data,
+                      start = list(B0 = 90, B3 = -1))
+summary(strong_vs_T3T4)
+AIC(strong_vs_T3T4)
+BIC(strong_vs_T3T4)
+pred <- predict(strong_vs_T3T4) #非線形モデルで準R2を算出する
+n <- length(pred)
+res <- resid(strong_vs_T3T4)
+w <- weights(strong_vs_T3T4)
+if (is.null(w)) w <- rep(1, n)
+rss <- sum(w * res ^ 2)
+resp <- pred + res
+center <- weighted.mean(resp, w)
+r.df <- summary(strong_vs_T3T4)$df[2]
+int.df <- 1
+tss <- sum(w * (resp - center)^2)
+r.sq <- 1 - rss/tss
+adj.r.sq <- 1 - (1 - r.sq) * (n - int.df) / r.df
+out <- list(pseudo.R.squared = r.sq,
+            adj.R.squared = adj.r.sq)
+out
+```
+
+
+# Additional Analysisの作図
+```{r ad1, include=TRUE}
+# T1->T2は強いヴァンテージ感受性モデルが支持された
+
+# B0（切片）=3.23
+# B1（傾き：低感受性群）= 0.00
+# C（交差点）=3.00
+# B3（傾き：高感受性群）= 0.03
+
+#png("figure/ad1.png", width = 1200, height = 1200)
+p <- ggplot(data, aes(ev_T1, wb_T2)) + 
+  geom_abline(intercept = 3.32, slope = 0.03, size = 1) +  
+  geom_abline(intercept = 3.23, slope = 0.00, size = 1, linetype = 2) + 
+  ylim(3.00, 4.00) + xlim(-3, 3)
+p + theme(plot.subtitle = element_text(vjust = 1), 
+          plot.caption = element_text(vjust = 1), 
+          axis.line = element_line(colour = "azure4", 
+                                   linetype = "solid"), axis.ticks = element_line(size = 1,linetype = "blank")) 
+#dev.off()
+```
+
+# T2->T3は強いヴァンテージ感受性モデルが支持された
+```{r ad2, include=TRUE}
+# B0（切片）=3.24
+# B1（傾き：低感受性群）= 0.00
+# C（交差点）=3.00
+# B3（傾き：高感受性群）= 0.03
+
+#png("figure/ad2.png", width = 1200, height = 1200)
+p <- ggplot(data, aes(ev_T2, wb_T3)) + 
+  geom_abline(intercept = 3.33, slope = 0.03, size = 1) +  
+  geom_abline(intercept = 3.24, slope = 0.00, size = 1, linetype = 2) + 
+  ylim(3.00, 4.00) + xlim(-3, 3)
+p + theme(plot.subtitle = element_text(vjust = 1), 
+          plot.caption = element_text(vjust = 1), 
+          axis.line = element_line(colour = "azure4", 
+                                   linetype = "solid"), axis.ticks = element_line(size = 1,linetype = "blank")) 
+#dev.off()
+```
+
+# T3->T4は強いヴァンテージ感受性モデルが支持された
+```{r ad3, include=TRUE}
+# B0（切片）=3.31
+# B1（傾き：低感受性群）= 0.00
+# C（交差点）=3.00
+# B3（傾き：高感受性群）= 0.03
+
+#png("figure/ad3.png", width = 1200, height = 1200)
+p <- ggplot(data, aes(ev_T3, wb_T4)) + 
+  geom_abline(intercept = 3.43, slope = 0.04, size = 1) +  
+  geom_abline(intercept = 3.31, slope = 0.00, size = 1, linetype = 2) + 
+  ylim(3.00, 4.00) + xlim(-3, 3)
+p + theme(plot.subtitle = element_text(vjust = 1), 
+          plot.caption = element_text(vjust = 1), 
+          axis.line = element_line(colour = "azure4", 
+                                   linetype = "solid"), axis.ticks = element_line(size = 1,linetype = "blank")) 
+#dev.off()
+```
+
+# （8）LEGITパッケージによる検算
+```{r varification, include=TRUE}
+library(LEGIT) 
+# https://cran.r-project.org/web/packages/LEGIT/vignettes/GxE_testing.html
+df <- as.data.frame(data) #データフレームとして明示
+```
+
+## 8-1. 1時点目の強いヴァンテージ感受性モデル
+```{r t1v, include=TRUE}
+GxE_test_BIC = GxE_interaction_test(data=df, genes=df[,"hsc_T1", drop=FALSE], env=df[,"ev_T1", drop = FALSE], formula_noGxE = wb_T1 ~ 1, crossover = c("min","max"), criterion="BIC")
+GxE_test_BIC
+# fits[[1]] is the best model (based on BIC)
+summary(GxE_test_BIC$fits[[1]]) 
+plot(GxE_test_BIC$fits$vantage_sensitivity_STRONG, xlim=c(-3,3), ylim=c(1,4), legend = "bottomright")
+```
+
+## 8-2. 2時点目の強い素因ストレスモデル
+```{r t2v, include=TRUE}
+GxE_test_BIC = GxE_interaction_test(data=df, genes=df[,"hsc_T2", drop=FALSE], env=df[,"ev_T2", drop = FALSE], formula_noGxE = wb_T2 ~ 1, crossover = c("min","max"), criterion="BIC")
+GxE_test_BIC
+# fits[[1]] is the best model (based on BIC)
+summary(GxE_test_BIC$fits[[1]]) 
+plot(GxE_test_BIC$fits[[1]], xlim=c(-3,3), ylim=c(1,4), legend = "bottomright")
+```
+
+## 8-3. 3時点目の強い素因ストレスモデル
+```{r t3v, include=TRUE}
+GxE_test_BIC = GxE_interaction_test(data=df, genes=df[,"hsc_T3", drop=FALSE], env=df[,"ev_T3", drop = FALSE], formula_noGxE = wb_T3 ~ 1, crossover = c("min","max"), criterion="BIC")
+GxE_test_BIC
+# fits[[1]] is the best model (based on BIC)
+summary(GxE_test_BIC$fits[[1]]) 
+plot(GxE_test_BIC$fits[[1]], xlim=c(-3,3), ylim=c(1,4), legend = "bottomright")
+```
+
+## 8-4. 4時点目の弱いヴァンテージ感受性モデル
+```{r t4v, include=TRUE}
+GxE_test_BIC = GxE_interaction_test(data=df, genes=df[,"hsc_T4", drop=FALSE], env=df[,"ev_T4", drop = FALSE], formula_noGxE = wb_T4 ~ 1, crossover = c("min","max"), criterion="BIC")
+GxE_test_BIC
+# fits[[1]] is the best model (based on BIC)
+summary(GxE_test_BIC$fits[[1]]) 
+plot(GxE_test_BIC$fits[[1]], xlim=c(-3,3), ylim=c(1,4), legend = "bottomright")
+```
+
+## 8-5. 1か月間の強い素因ストレスモデル
+```{r m1v, include=TRUE}
+GxE_test_BIC = GxE_interaction_test(data=df, genes=df[,"hsc_onemonth", drop=FALSE], env=df[,"ev_onemonth", drop = FALSE], formula_noGxE = wb_onemonth ~ 1, crossover = c("min","max"), criterion="BIC")
+GxE_test_BIC
+# fits[[1]] is the best model (based on BIC)
+summary(GxE_test_BIC$fits[[1]]) 
+plot(GxE_test_BIC$fits[[1]], xlim=c(-3,3), ylim=c(1,4), legend = "bottomright")
+```
+
+## 8-6. 追加分析の2時点目：強い素因ストレスモデル
+```{r addt2v, include=TRUE}
+GxE_test_BIC = GxE_interaction_test(data=df, genes=df[,"hsc_T1", drop=FALSE], env=df[,"ev_T1", drop = FALSE], formula_noGxE = wb_T2 ~ 1, crossover = c("min","max"), criterion="BIC")
+GxE_test_BIC
+# fits[[1]] is the best model (based on BIC)
+summary(GxE_test_BIC$fits[[1]]) 
+plot(GxE_test_BIC$fits[[1]], xlim=c(-3,3), ylim=c(1,4), legend = "bottomright")
+```
+
+## 8-7. 追加分析の3時点目：強い素因ストレスモデル
+```{r addt3v, include=TRUE}
+GxE_test_BIC = GxE_interaction_test(data=df, genes=df[,"hsc_T2", drop=FALSE], env=df[,"ev_T2", drop = FALSE], formula_noGxE = wb_T3 ~ 1, crossover = c("min","max"), criterion="BIC")
+GxE_test_BIC
+# fits[[1]] is the best model (based on BIC)
+summary(GxE_test_BIC$fits[[1]]) 
+plot(GxE_test_BIC$fits[[1]], xlim=c(-3,3), ylim=c(1,4), legend = "bottomright")
+```
+
+## 8-8. 追加分析の4時点目：強い素因ストレスモデル```{r t1v, include=TRUE}
+```{r addt4v, include=TRUE}
+GxE_test_BIC = GxE_interaction_test(data=df, genes=df[,"hsc_T3", drop=FALSE], env=df[,"ev_T3", drop = FALSE], formula_noGxE = wb_T4 ~ 1, crossover = c("min","max"), criterion="BIC")
+GxE_test_BIC
+# fits[[1]] is the best model (based on BIC)
+summary(GxE_test_BIC$fits[[1]]) 
+plot(GxE_test_BIC$fits[[1]], xlim=c(-3,3), ylim=c(1,4), legend = "bottomright")
+```
+
+# (9) VSを示唆するAESを用いた再分析
+
+## 9-1. 1時点目のモデル：VS支持
+```{r aest1, include=TRUE}
+GxE_test_BIC = GxE_interaction_test(data=df, genes=df[,"aes_T1", drop=FALSE], env=df[,"ev_T1", drop = FALSE], formula_noGxE = wb_T1 ~ 1, crossover = c("min","max"), criterion="BIC")
+GxE_test_BIC
+# fits[[1]] is the best model (based on BIC)
+summary(GxE_test_BIC$fits[[1]]) 
+plot(GxE_test_BIC$fits$vantage_sensitivity_STRONG, xlim=c(-3,3), ylim=c(1,4), legend = "bottomright")
+```
+
+## 9-2. 2時点目のモデル：VS支持
+```{r aest2, include=TRUE}
+GxE_test_BIC = GxE_interaction_test(data=df, genes=df[,"aes_T2", drop=FALSE], env=df[,"ev_T2", drop = FALSE], formula_noGxE = wb_T2 ~ 1, crossover = c("min","max"), criterion="BIC")
+GxE_test_BIC
+# fits[[1]] is the best model (based on BIC)
+summary(GxE_test_BIC$fits[[1]]) 
+plot(GxE_test_BIC$fits[[1]], xlim=c(-3,3), ylim=c(1,4), legend = "bottomright")
+```
+
+## 9-3. 3時点目のモデル：VS支持
+```{r aest3, include=TRUE}
+GxE_test_BIC = GxE_interaction_test(data=df, genes=df[,"aes_T3", drop=FALSE], env=df[,"ev_T3", drop = FALSE], formula_noGxE = wb_T3 ~ 1, crossover = c("min","max"), criterion="BIC")
+GxE_test_BIC
+# fits[[1]] is the best model (based on BIC)
+summary(GxE_test_BIC$fits[[1]]) 
+plot(GxE_test_BIC$fits[[1]], xlim=c(-3,3), ylim=c(1,4), legend = "bottomright")
+```
+
+## 9-4. 4時点目のモデル：VS支持
+```{r aest4, include=TRUE}
+GxE_test_BIC = GxE_interaction_test(data=df, genes=df[,"aes_T4", drop=FALSE], env=df[,"ev_T4", drop = FALSE], formula_noGxE = wb_T4 ~ 1, crossover = c("min","max"), criterion="BIC")
+GxE_test_BIC
+# fits[[1]] is the best model (based on BIC)
+summary(GxE_test_BIC$fits[[1]]) 
+plot(GxE_test_BIC$fits[[1]], xlim=c(-3,3), ylim=c(1,4), legend = "bottomright")
+```
+
+## 9-5. 追加分析の2時点目：VS支持
+```{r addaest2, include=TRUE}
+GxE_test_BIC = GxE_interaction_test(data=df, genes=df[,"aes_T1", drop=FALSE], env=df[,"ev_T1", drop = FALSE], formula_noGxE = wb_T2 ~ 1, crossover = c("min","max"), criterion="BIC")
+GxE_test_BIC
+# fits[[1]] is the best model (based on BIC)
+summary(GxE_test_BIC$fits[[1]]) 
+plot(GxE_test_BIC$fits[[1]], xlim=c(-3,3), ylim=c(1,4), legend = "bottomright")
+```
+
+## 9-6. 追加分析の3時点目：VS支持
+```{r addaest3, include=TRUE}
+GxE_test_BIC = GxE_interaction_test(data=df, genes=df[,"aes_T2", drop=FALSE], env=df[,"ev_T2", drop = FALSE], formula_noGxE = wb_T3 ~ 1, crossover = c("min","max"), criterion="BIC")
+GxE_test_BIC
+# fits[[1]] is the best model (based on BIC)
+summary(GxE_test_BIC$fits[[1]]) 
+plot(GxE_test_BIC$fits[[1]], xlim=c(-3,3), ylim=c(1,4), legend = "bottomright")
+```
+
+## 9-7. 追加分析の4時点目：VS支持
+```{r addaest4, include=TRUE}
+GxE_test_BIC = GxE_interaction_test(data=df, genes=df[,"aes_T3", drop=FALSE], env=df[,"ev_T3", drop = FALSE], formula_noGxE = wb_T4 ~ 1, crossover = c("min","max"), criterion="BIC")
+GxE_test_BIC
+# fits[[1]] is the best model (based on BIC)
+summary(GxE_test_BIC$fits[[1]]) 
+plot(GxE_test_BIC$fits[[1]], xlim=c(-3,3), ylim=c(1,4), legend = "bottomright")
 ```
 
 # 分析は以上です
